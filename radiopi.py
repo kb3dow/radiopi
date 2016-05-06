@@ -14,7 +14,8 @@
 # Adafruit_CharLCDPlate
 #
 # Additions by Rajarajan Rajamani - to save settings to an .ini file
-
+# 5/6/16 Some ideas for flask from :
+#     http://www.instructables.com/id/Raspberry-Pi-Internet-Radio-With-Flask/?ALLSTEPS
 # dependancies
 from Adafruit_I2C          import Adafruit_I2C
 from Adafruit_MCP230xx     import Adafruit_MCP230XX
