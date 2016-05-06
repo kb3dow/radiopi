@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # radio.py, version 2.1 (RGB LCD Pi Plate version)
 # February 17, 2013
@@ -43,7 +43,7 @@ LCD_QUEUE = Queue()
 cfgParser = SafeConfigParser()
 
 # Globals
-INI_FILE       = 'radiopi.ini'
+INI_FILE       = '/home/pi/radiopi/radiopi.ini'
 PLAYLIST_MSG   = []
 STATION        = 1
 NUM_STATIONS   = 0
@@ -199,6 +199,50 @@ def radioInit():
     return
 
 
+def chanUp():
+    global STATION, NUM_STATIONS
+    STATION += 1
+    if(STATION > NUM_STATIONS):
+        STATION = 1
+    if DEBUG:
+        print('playing Station ' + repr(STATION))
+    mpc_play(STATION)
+    return True
+
+
+def chanDown():
+    global STATION, NUM_STATIONS
+    STATION -= 1
+    if(STATION < 1):
+        STATION = NUM_STATIONS
+    if DEBUG:
+        print('playing Station ' + repr(STATION))
+    mpc_play(STATION)
+    return True
+
+
+def volUp(amt):
+    global volCur
+    if(volCur <= (100-amt)):
+        output = run_cmd("mpc volume +"+str(amt))
+        volCur += amt
+        if DEBUG:
+            print('Setting Volume ' + repr(volCur))
+        return True
+    return False
+
+
+def volDown(amt):
+    global volCur
+    if(volCur >= amt):
+        output = run_cmd("mpc volume -"+str(amt))
+        volCur -= amt
+        if DEBUG:
+            print('Setting Volume ' + repr(volCur))
+        return True
+    return False
+
+
 def radioPlay():
     global volSpeed, volSet, volCur, STATION, NUM_STATIONS
     global PLAYLIST_MSG, cfgParser, INI_FILE
@@ -214,39 +258,25 @@ def radioPlay():
 
         # LEFT button pressed
         if(press == LEFT):
-            STATION -= 1
-            if(STATION < 1):
-                STATION = NUM_STATIONS
+            chanDown()
             LCD_QUEUE.put(PLAYLIST_MSG[STATION - 1], True)
-            # start play in 300msec unless another key pressed
-            countdown_to_play = 3
             showTime = False
             timeSinceLastDisplayChange = 0
 
         # RIGHT button pressed
         if(press == RIGHT):
-            STATION += 1
-            if(STATION > NUM_STATIONS):
-                STATION = 1
+            chanUp()
             LCD_QUEUE.put(PLAYLIST_MSG[STATION - 1], True)
-            # start play in 300msec unless another key pressed
-            countdown_to_play = 3
             showTime = False
             timeSinceLastDisplayChange = 0
 
         # UP button pressed
         if(press == UP):
-            output = run_cmd("mpc volume +2")
-            volSet = True
-            if(volCur < 99):
-                volCur += 2
+            volSet = volUp(2)
 
         # DOWN button pressed
         if(press == DOWN):
-            output = run_cmd("mpc volume -2")
-            volSet = True
-            if(volCur > 1):
-                volCur -= 2
+            volSet = volDown(2)
 
         # UP/DOWN volume change show bar on LCD
         if volSet is True:
@@ -260,8 +290,8 @@ def radioPlay():
                  chr(nVertLines) +  # Fractional brick
                  chr(0) * (6 - nSolid))  # Spaces
             if DEBUG:
-                #print('vPerSolidBar = ' + str (vPerSolidBar) + '\n')
-                #print('vPerLine = ' + str (vPerLine) + '\n')
+                # print('vPerSolidBar = ' + str (vPerSolidBar) + '\n')
+                # print('vPerLine = ' + str (vPerLine) + '\n')
                 print('volCur = ' + str(volCur))
                 print('nSolid = ' + str(nSolid))
                 print('nVertLines = ' + str(nVertLines))
@@ -293,14 +323,6 @@ def radioPlay():
         if(press == SELECT):
             return  # Return back to main menu
             #menu_pressed()
-
-        # If we haven't had a key press in 300 msec
-        # go ahead and issue the MPC command
-        if(countdown_to_play > 0):
-            countdown_to_play -= 1
-            if(countdown_to_play == 0):
-               # Play requested station
-                mpc_play(STATION)
 
         delay_milliseconds(99)
         timeSinceLastDisplayChange += 99
@@ -556,8 +578,8 @@ def ShowDateTime():
     LCD.clear()
     while not(LCD.buttons()):
         sleep(0.25)
-        #LCD.home()
-        #LCD.message(strftime('%a %b %d %Y\n%I:%M:%S %p', localtime()))
+        # LCD.home()
+        # LCD.message(strftime('%a %b %d %Y\n%I:%M:%S %p', localtime()))
         LCD_QUEUE.put(strftime('%a %b %d %Y\n%I:%M:%S %p', localtime()))
 
 
@@ -597,7 +619,7 @@ def Use10Network():
         sleep(0.25)
 
 
-#only use the following if you find useful
+# only use the following if you find useful
 def UseDHCP():
     "Allows you to switch to a network config that uses DHCP"
     LCD.clear()
