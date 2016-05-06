@@ -15,7 +15,7 @@
 #
 # Additions by Rajarajan Rajamani - to save settings to an .ini file
 
-#dependancies
+# dependancies
 from Adafruit_I2C          import Adafruit_I2C
 from Adafruit_MCP230xx     import Adafruit_MCP230XX
 from Adafruit_CharLCDPlate import Adafruit_CharLCDPlate
@@ -28,10 +28,10 @@ from ConfigParser          import SafeConfigParser
 import commands
 from string                import split
 from xml.dom.minidom       import *
-#from ListSelector          import ListSelector
+# from ListSelector          import ListSelector
 
-import                     smbus
-import                     time
+import smbus
+import time
 
 # initialize the LCD plate
 #   use busnum = 0 for raspi version 1 (256MB)
@@ -51,12 +51,12 @@ VOL_MIN        = 0
 VOL_MAX        = 100
 VOL_DEFAULT    = 70
 LCD_COLOR      = LCD.VIOLET
-volCur         = VOL_MIN     # Current volume
-volNew         = VOL_DEFAULT # 'Next' volume after interactions
-volSpeed       = 1.0         # Speed of volume change (accelerates w/hold)
-volSet         = False       # True if currently setting volume
-paused         = False       # True if music is paused
-BARWIDTH       = 7.0         # Vol Bar width on display
+volCur         = VOL_MIN      # Current volume
+volNew         = VOL_DEFAULT  # 'Next' volume after interactions
+volSpeed       = 1.0          # Speed of volume change (accelerates w/hold)
+volSet         = False        # True if currently setting volume
+paused         = False        # True if music is paused
+BARWIDTH       = 7.0          # Vol Bar width on display
 VOLSPAN        = VOL_MAX - VOL_MIN + 1
 vPerSolidBar   = VOLSPAN / BARWIDTH
 vPerLine       = vPerSolidBar / 5.0  # There are 5 vert lines per char display
@@ -67,10 +67,10 @@ DEBUG = 0
 DISPLAY_ROWS = 2
 DISPLAY_COLS = 16
 
-#set zip chosen
+# set zip chosen
 zipchosen = 20723
-#set location
-locchosen=['Laurel, MD', '39.1333', '-76.8435', 92]
+# set location
+locchosen = ['Laurel, MD', '39.1333', '-76.8435', 92]
 
 # Buttons
 NONE           = 0x00
@@ -149,7 +149,7 @@ def lcdInit():
     # Create volume bargraph custom characters (chars 0-5):
     for i in range(6):
         bitmap = []
-        bits   = (255 << (5 - i)) & 0x1f
+        bits = (255 << (5 - i)) & 0x1f
         for j in range(8):
             bitmap.append(bits)
         LCD.createChar(i, bitmap)
@@ -309,20 +309,20 @@ def radioPlay():
             volNew = volCur - volSpeed
             if volNew < VOL_MIN:
                 volNew = VOL_MIN
-        #volTime   = time.time() # Time of last volume button press
-        #volSpeed *= 1.15        # Accelerate volume change
-###     elif volSet:
-###         volSpeed = 1.0 # Buttons released = reset volume speed
-###         # If no interaction in 4 seconds, return to prior state.
-###         # Volume bar will be erased by subsequent operations.
-###         if (time.time() - volTime) >= 4:
-###             volSet = False
-###             if paused: drawPaused()
+        # volTime   = time.time() # Time of last volume button press
+        # volSpeed *= 1.15        # Accelerate volume change
+        #     elif volSet:
+        #         volSpeed = 1.0 # Buttons released = reset volume speed
+        #         # If no interaction in 4 seconds, return to prior state.
+        #         # Volume bar will be erased by subsequent operations.
+        #         if (time.time() - volTime) >= 4:
+        #             volSet = False
+        #             if paused: drawPaused()
 
         # SELECT button pressed
         if(press == SELECT):
             return  # Return back to main menu
-            #menu_pressed()
+            # menu_pressed()
 
         delay_milliseconds(99)
         timeSinceLastDisplayChange += 99
@@ -385,7 +385,7 @@ def loadPlaylist():
     # Load PLAYLIST_MSG list
     PLAYLIST_MSG = []
     with open("/home/pi/radiopi/radio_playlist.sh", "r") as playlist:
-       # Skip leading hash-bang line
+        # Skip leading hash-bang line
         for line in playlist:
             if line[0:1] != '#!':
                 break
@@ -433,9 +433,9 @@ def display_ipaddr():
     muting = False
     keep_looping = True
     while (keep_looping):
-       # Every 1/2 second, update the time display
+        # Every 1/2 second, update the time display
         i += 1
-        #if(i % 10 == 0):
+        # if(i % 10 == 0):
         if(i % 5 == 0):
             LCD_QUEUE.put(datetime.now().strftime('%b %d  %H:%M:%S\n') +
                           ipaddr, True)
@@ -470,16 +470,16 @@ def display_ipaddr():
         # LEFT or RIGHT toggles mute
         elif(press == LEFT or press == RIGHT):
             if muting:
-                #amixer command not working, can't use next line
-                #output = run_cmd("amixer -q cset numid=2 1")
+                # amixer command not working, can't use next line
+                # output = run_cmd("amixer -q cset numid=2 1")
                 mpc_play(STATION)
                 # work around a problem.  Play always starts at full volume
                 delay_milliseconds(400)
                 output = run_cmd("mpc volume +2")
                 output = run_cmd("mpc volume -2")
             else:
-                #amixer command not working, can't use next line
-                #output = run_cmd("amixer -q cset numid=2 0")
+                # amixer command not working, can't use next line
+                # output = run_cmd("amixer -q cset numid=2 0")
                 output = run_cmd("mpc stop")
             muting = not muting
 
@@ -496,7 +496,6 @@ def run_cmd(cmd):
 
 def mpc_play(STATION):
     pid = Popen(["/usr/bin/mpc", "play", '%d' % (STATION)]).pid
-
 
 
 # commands
@@ -600,7 +599,7 @@ def ShowIPAddress():
         sleep(0.25)
 
 
-#only use the following if you find useful
+# only use the following if you find useful
 def Use10Network():
     "Allows you to switch to a different network for local connection"
     LCD.clear()
@@ -610,8 +609,8 @@ def Use10Network():
             break
         if LCD.buttonPressed(LCD.SELECT):
             # uncomment the following once you have a separate network defined
-            #commands.getoutput("sudo cp /etc/network/interfaces.hub.10"
-            #"/etc/network/interfaces")
+            # commands.getoutput("sudo cp /etc/network/interfaces.hub.10"
+            # "/etc/network/interfaces")
             LCD.clear()
             LCD.message('Please reboot')
             sleep(1.5)
@@ -629,8 +628,8 @@ def UseDHCP():
             break
         if LCD.buttonPressed(LCD.SELECT):
             # uncomment the following once you get an original copy in place
-            #commands.getoutput("sudo"
-            #"cp /etc/network/interfaces.orig /etc/network/interfaces")
+            # commands.getoutput("sudo"
+            # "cp /etc/network/interfaces.orig /etc/network/interfaces")
             LCD.clear()
             LCD.message('Please reboot')
             sleep(1.5)
@@ -674,6 +673,7 @@ def SetLocation():
     item = selector.Pick()
     # do something useful
     locchosen = list[item]
+
 
 def waitForButton():
         # Poll all buttons once,
@@ -944,7 +944,7 @@ def main():
     display.display()
 
     while 1:
-      # Poll all buttons once, avoids repeated I2C traffic for different cases
+        # Poll all buttons once, avoids repeated I2C traffic
         pressed = read_buttons()
 
         if (pressed == LEFT):
