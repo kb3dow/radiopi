@@ -16,6 +16,7 @@
 # Additions by Rajarajan Rajamani - to save settings to an .ini file
 # 5/6/16 Some ideas for flask from :
 #     http://www.instructables.com/id/Raspberry-Pi-Internet-Radio-With-Flask/?ALLSTEPS
+
 # dependancies
 from Adafruit_I2C          import Adafruit_I2C
 from Adafruit_MCP230xx     import Adafruit_MCP230XX
@@ -181,7 +182,7 @@ def radioInit():
     worker.start()
 
     # Display startup banner
-    LCD_QUEUE.put('Welcome to\nUsualPanic Radio', True)
+    LCD_QUEUE.put('Welcome to\nRadio Pi', True)
 
     # Load our station playlist
     loadPlaylist()
@@ -253,6 +254,9 @@ def radioPlay():
     showTime = False
     timeSinceLastDisplayChange = 0
 
+    if DEBUG:
+        print('inside radioPlay - flushing')
+    flush_buttons()
     # Main loop
     while True:
         press = read_buttons()
@@ -329,8 +333,9 @@ def radioPlay():
         if (showTime):
             if (timeSinceLastDisplayChange > 900):
                 timeSinceLastDisplayChange = 0
-                LCD_QUEUE.put(PLAYLIST_MSG[STATION - 1].split()[0] + "\n" +
-                              datetime.now().strftime('%b %d  %H:%M:%S'), True)
+                now = datetime.now()
+                LCD_QUEUE.put(now.strftime('%a') + PLAYLIST_MSG[STATION - 1].split()[0] + "\n" +
+                              now.strftime('%b %d  %H:%M:%S'), True)
         else:
             if (timeSinceLastDisplayChange > 5000):
                 timeSinceLastDisplayChange = 0
@@ -931,10 +936,13 @@ class Display:
 def main():
     global STATION, volCur, NUM_STATIONS, PLAYLIST_MSG, cfgParser, INI_FILE
 
+    if DEBUG:
+        print('entering main()')
+
     settingsLoad()
     lcdInit()
     radioInit()
-    ShowDateTime()
+    radioPlay()
 
     uiItems = Folder('root', '')
 
@@ -948,7 +956,9 @@ def main():
     display = Display(uiItems)
     display.display()
 
-    flush_buttons()
+    if DEBUG:
+        print('entering while() in main()')
+
     while 1:
         # Poll all buttons once, avoids repeated I2C traffic
         pressed = read_buttons()
