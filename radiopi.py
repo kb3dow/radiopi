@@ -26,11 +26,11 @@ from time                  import sleep, strftime, localtime
 from Queue                 import Queue
 from threading             import Thread
 from ConfigParser          import SafeConfigParser
-import commands
 from string                import split
 from xml.dom.minidom       import *
 # from ListSelector          import ListSelector
 
+import commands
 import smbus
 import time
 
@@ -44,7 +44,7 @@ LCD_QUEUE = Queue()
 cfgParser = SafeConfigParser()
 
 # Globals
-INI_FILE       = '/home/pi/radiopi/radiopi.ini'
+INI_FILE       = 'radiopi.ini'
 PLAYLIST_MSG   = []
 STATION        = 1
 NUM_STATIONS   = 0
@@ -257,6 +257,10 @@ def radioPlay():
     while True:
         press = read_buttons()
 
+        # SELECT button pressed
+        if(press == SELECT):
+            return  # Return back to main menu
+
         # LEFT button pressed
         if(press == LEFT):
             chanDown()
@@ -320,11 +324,6 @@ def radioPlay():
         #             volSet = False
         #             if paused: drawPaused()
 
-        # SELECT button pressed
-        if(press == SELECT):
-            return  # Return back to main menu
-            # menu_pressed()
-
         delay_milliseconds(99)
         timeSinceLastDisplayChange += 99
         if (showTime):
@@ -336,6 +335,11 @@ def radioPlay():
             if (timeSinceLastDisplayChange > 5000):
                 timeSinceLastDisplayChange = 0
                 showTime = True
+
+
+def flush_buttons():
+    while(LCD.buttons() != 0):
+        delay_milliseconds(1)
 
 
 def read_buttons():
@@ -944,6 +948,7 @@ def main():
     display = Display(uiItems)
     display.display()
 
+    flush_buttons()
     while 1:
         # Poll all buttons once, avoids repeated I2C traffic
         pressed = read_buttons()
