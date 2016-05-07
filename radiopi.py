@@ -334,7 +334,7 @@ def radioPlay():
             if (timeSinceLastDisplayChange > 900):
                 timeSinceLastDisplayChange = 0
                 now = datetime.now()
-                LCD_QUEUE.put(now.strftime('%a') + PLAYLIST_MSG[STATION - 1].split()[0] + "\n" +
+                LCD_QUEUE.put(PLAYLIST_MSG[STATION - 1].split()[0] + "\n" +
                               now.strftime('%b %d  %H:%M:%S'), True)
         else:
             if (timeSinceLastDisplayChange > 5000):
