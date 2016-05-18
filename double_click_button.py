@@ -1,45 +1,21 @@
+import time
+
 # NOTE: Code taken from
 # http:##jmsarduino.blogspot.com/2009/10/4-way-button-click-double-click-hold.html
 # 4-Way Button: Click, Double-Click, Press+Hold, and Press+Long-Hold
 # By Jeff Saltzman
 # Oct. 13, 2009
 
-# Return Values
-# 1) Click: rapid press and release
-# 2) Double-Click: two clicks in quick succession
-# 3) Press and Hold: holding the button down
-# 4) Long Press and Hold: holding the button down for a long time
 
-'''
-void loop()
-{
-    ## Get button event and act accordingly
-    int b = checkButton();
-    if (b == 1) clickEvent();
-    if (b == 2) doubleClickEvent();
-    if (b == 3) holdEvent();
-    if (b == 4) longHoldEvent();
-}
-'''
-
-
-'''
-    MULTI-CLICK: One Button, Multiple Events
-
-    Oct 12, 2009
-    Run checkButton() to retrieve a button event:
-    Click
-    Double-Click
-    Hold
-    Long Hold
-'''
-
-import time
-current_milli_time = lambda: int(round(time.time() * 1000))
+# TODO: Move to a utils.py file later
+# Current time in milli seconds. Taken from
+# http://stackoverflow.com/questions/5998245/get-current-time-in-milliseconds-in-python
+def millis():
+    return int(round(time_.time() * 1000))
 
 # Button timing variables
-dbounce = 20    # ms debounce period to prevent flickering when pressing
-# or releasing the button
+# ms debounce period to avoid flickering when pressing or releasing the button
+dbounce = 20
 DCgap = 250  # max ms between clicks for a double click event
 holdTime = 2000  # ms hold period: how long to wait for press+hold event
 longHoldTime = 5000  # ms long hold period:
@@ -61,30 +37,33 @@ holdEventPast = False  # whether not the hold event happened already
 longHoldEventPast = False  # whether the long hold event happened already
 
 
+# Check to see if button pressed or held
+# Return Values
+# 1) Click: rapid press and release
+# 2) Double-Click: two clicks in quick succession
+# 3) Press and Hold: holding the button down
+# 4) Long Press and Hold: holding the button down for a long time
 def checkButton():
     int event = 0
     # Read the state of the button
     buttonVal = digitalRead(buttonPin)
     # Button pressed down
-    if (buttonVal == LOW and buttonLast == HIGH
-            and (millis() - upTime) > debounce):
+    if (buttonVal == LOW and buttonLast == HIGH and
+            (millis() - upTime) > debounce):
         downTime = millis()
         ignoreUp = False
         waitForUp = False
         singleOK = True
         holdEventPast = False
         longHoldEventPast = False
-        if ((millis()-upTime) < DCgap
-                and DConUp is False
-                and DCwaiting is True):
+        if (millis()-upTime) < DCgap and not DConUp and DCwaiting:
             DConUp = True
         else:
             DConUp = False
         DCwaiting = False
     # Button released
-    else if (buttonVal == HIGH
-            and buttonLast == LOW
-            and (millis() - downTime) > debounce):
+    else if (buttonVal and not buttonLast and
+             (millis() - downTime) > debounce):
         if not ignoreUp:
             upTime = millis()
             if not DConUp:
