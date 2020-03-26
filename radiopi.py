@@ -24,14 +24,14 @@ from Adafruit_CharLCDPlate import Adafruit_CharLCDPlate
 from datetime              import datetime
 from subprocess            import *
 from time                  import sleep, strftime, localtime
-from Queue                 import Queue
+from queue                 import Queue
 from threading             import Thread
-from ConfigParser          import SafeConfigParser
-from string                import split
+from configparser          import ConfigParser
+#from string                import split
 from xml.dom.minidom       import *
 # from ListSelector          import ListSelector
 
-import commands
+import subprocess
 import smbus
 import time
 
@@ -42,7 +42,7 @@ LCD = Adafruit_CharLCDPlate(busnum=1)
 
 # Define a queue to communicate with worker thread
 LCD_QUEUE = Queue()
-cfgParser = SafeConfigParser()
+cfgParser = ConfigParser()
 
 # Globals
 INI_FILE       = 'radiopi.ini'
@@ -532,7 +532,7 @@ def DoShutdown():
             LCD.clear()
             LCD.backlight(LCD.OFF)
             saveSettings()
-            commands.getoutput("sudo shutdown -h now")
+            subprocess.run(["sudo", "shutdown", "-h", "now"])
             quit()
         sleep(0.25)
 
@@ -592,21 +592,28 @@ def ShowDateTime():
         LCD_QUEUE.put(strftime('%a %b %d %Y\n%I:%M:%S %p', localtime()))
 
 
+'''
+# NOTE: NOT-USED YET
 def SetDateTime():
     if DEBUG:
         print('in SetDateTime')
 
 
+# NOTE: NOT-USED YET
 def ShowIPAddress():
     if DEBUG:
         print('in ShowIPAddress')
     LCD.clear()
-    LCD.message(commands.getoutput("/sbin/ifconfig").
+    #######
+    # RR TODO
+    # LCD.message(commands.getoutput("/sbin/ifconfig").
                 split("\n")[1].split()[1][5:])
+    #######
     while 1:
         if LCD.buttonPressed(LCD.LEFT):
             break
         sleep(0.25)
+'''
 
 
 # only use the following if you find useful
@@ -662,7 +669,7 @@ def ShowLocation():
     global locchosen
     if DEBUG:
         print('in ShowLocation')
-        print locchosen[0], locchosen[1], locchosen[2]
+        print(locchosen[0], locchosen[1], locchosen[2])
     LCD.clear()
     LCD.message(locchosen[0])
     sleep(0.1)
@@ -707,7 +714,9 @@ class CommandToRun:
         self.commandToRun = theCommand
 
     def Run(self):
-        self.clist = split(commands.getoutput(self.commandToRun), '\n')
+        self.clist = ''
+        # RR TODO remove dependance on commands.getoutput
+        #self.clist = split(commands.getoutput(self.commandToRun), '\n')
         clistlen = len(self.clist)
         if clistlen > 0:
             LCD.clear()
