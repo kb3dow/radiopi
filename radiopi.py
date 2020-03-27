@@ -18,9 +18,9 @@
 #     http://www.instructables.com/id/Raspberry-Pi-Internet-Radio-With-Flask/?ALLSTEPS
 
 # dependancies
-from Adafruit_I2C          import Adafruit_I2C
-from Adafruit_MCP230xx     import Adafruit_MCP230XX
-from Adafruit_CharLCDPlate import Adafruit_CharLCDPlate
+from Adafruit.Adafruit_I2C          import Adafruit_I2C
+from Adafruit.Adafruit_MCP230xx     import Adafruit_MCP230XX
+from Adafruit.Adafruit_CharLCDPlate import Adafruit_CharLCDPlate
 from datetime              import datetime
 from subprocess            import *
 from time                  import sleep, strftime, localtime
