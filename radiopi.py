@@ -63,7 +63,7 @@ VOLSPAN        = VOL_MAX - VOL_MIN + 1
 vPerSolidBar   = VOLSPAN / BARWIDTH
 vPerLine       = vPerSolidBar / 5.0  # There are 5 vert lines per char display
 
-configfile = 'radiopi.xml'
+menufile = 'radiopi.xml'
 # set DEBUG=1 for print debug statements
 DEBUG = 0
 DISPLAY_ROWS = 2
@@ -956,7 +956,7 @@ def main():
     uiItems = Folder('root', '')
 
     # parse an XML file by name
-    dom = parse(configfile)
+    dom = parse(menufile)
 
     top = dom.documentElement
 
