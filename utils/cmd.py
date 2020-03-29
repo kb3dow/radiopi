@@ -1,10 +1,10 @@
 import subprocess
 import sys
 
-def subp_get_oe(cmd_line):
-'''
-    Purpose: Return stdout and stderr of a shell command.
-'''
+def cmd_oe(cmd_line):
+    '''
+        Purpose: Return stdout and stderr of a shell command.
+    '''
     o = []
     e = []
     p = subprocess.Popen (cmd_line,
