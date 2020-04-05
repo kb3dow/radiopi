@@ -121,11 +121,62 @@ charSevenBitmaps = [[0b10000,  # Play (also selected station)
 
 
 # ----------------------------
-# WORKER THREAD
+# WORKER THREADS
 # ----------------------------
 
-# Define a function to run in the worker thread
-def update_lcd(q):
+def get_mpd_info(lcd_q, client):
+    try:
+        cso = client.currentsong()
+        cst = client.status()
+        print ('State: %s, Vol: %s, Title: %s' % (cst['state'], cst['volume'], cso['title']))
+        if cst['state'] == 'play':
+            state_bitmap = chr(8)
+        elif cst['state'] == 'pause':
+            state_bitmap = chr(7)
+        # elif cst['state'] == 'stop':
+        else:
+            state_bitmap = chr(5)
+
+        line1 = cso['title'][:16].ljust(16, ' ')
+        line2 = '%s Vol: %s' % (state_bitmap,
+                                cst['volume'])
+        line2 = line2.ljust(16, ' ')
+        lcd_q.put((MSG_LCD, line1 + '\n' + line2),
+                  True)
+    except Exception as e:
+        print('Exception: {}'.format(e))
+        raise e
+
+
+
+def mpd_poller(lcd_q):
+    client = MPDClient()               # create client object
+    client.timeout = 10                # network timeout in seconds (floats allowed), default: None
+    client.idletimeout = None          # timeout for fetching the result of the idle command is handled seperately, default: None
+    while True:
+        client.connect("localhost", 6600)  # connect to localhost:6600
+        print(client.mpd_version)          # print the MPD version
+        print(client.status())
+        while True:
+            try:
+                changes = client.idle()
+                for change in changes:
+                    if change == 'player' or change == 'mixer':
+                        get_mpd_info(lcd_q, client)
+
+            except Exception as e:
+                print('Exception: {}'.format(e))
+                break
+        client.close()                     # send the close command
+        client.disconnect()                # disconnect from the server
+    client.close()                     # send the close command
+    client.disconnect()                # disconnect from the server
+    
+
+def lcd_worker(q):
+    '''
+    Define a function to run in the worker thread
+    '''
     while True:
         msgType, msg = q.get()
         # if we're falling behind, skip some LCD updates
@@ -198,6 +249,8 @@ def lcdInit():
 
     # By default, char 7 is loaded in 'pause' state
     LCD.createChar(7, charSevenBitmaps[1])
+    # By default, char 8 is loaded in 'play' state
+    LCD.createChar(8, charSevenBitmaps[0])
 
 
 def radioInit():
@@ -207,9 +260,14 @@ def radioInit():
     #output = run_cmd("mpc stop") # NOTE: no need to stop what was playing
 
     # Create the worker thread and make it a daemon
-    lcd_worker = threading.Thread(target=update_lcd, args=(LCD_QUEUE,))
-    lcd_worker.setDaemon(True)
-    lcd_worker.start()
+    lcd_thread = threading.Thread(target=lcd_worker, args=(LCD_QUEUE,))
+    lcd_thread.setDaemon(True)
+    lcd_thread.start()
+
+    # Create the 2nd worker thread and make it a daemon
+    mpd_thread = threading.Thread(target=mpd_poller, args=(LCD_QUEUE,))
+    mpd_thread.setDaemon(True)
+    mpd_thread.start()
 
     # Display startup banner
     LCD_QUEUE.put((MSG_LCD, 'Welcome to\nRadio Pi'), True)
@@ -954,6 +1012,10 @@ def main():
     lcdInit()
     playListLoad(mpdc)
     radioInit()
+
+    while True:
+        time.sleep(2.5)
+
     playListPlay(mpdc)
 
     uiItems = Folder('root', '')
@@ -997,9 +1059,10 @@ def main():
 
     time.sleep(0.15)
 
-    update_lcd.join()
+    lcd_thread.join()
+    mpd_thread.join()
 
 if __name__ == '__main__':
     main()
 
-# vim: set expandtab shiftwidth=4 softtabstop=4 textwidth=79:
+# vim: set expandtab shiftwidth=4 softtabstop=4 textwidth=79 ai:
