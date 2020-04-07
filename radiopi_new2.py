@@ -49,6 +49,9 @@ LCD = Adafruit_CharLCDPlate(busnum=1)
 LCD_QUEUE = queue.Queue()
 cfgParser = configparser.ConfigParser()
 
+STATE_PLAYER_MODE = 0
+STATE_MENU_MODE = 1
+
 # Globals
 INI_FILE = 'radiopi.ini'
 playlist_track_names = []
@@ -69,6 +72,7 @@ bar_width = 7.0          # Vol Bar width on display
 rng_vol = max_vol - min_vol + 1
 vol_solbar = rng_vol / bar_width
 vol_line = vol_solbar / 5.0  # There are 5 vert lines per char display
+display_mode_state = 0
 
 menufile = 'radiopi.xml'
 # set DEBUG=1 for print debug statements
@@ -89,7 +93,7 @@ LEFT = 0x10
 UP_AND_DOWN = 0x0C
 LEFT_AND_RIGHT = 0x12
 LONG_PRESS = 0x80
-LONG_PRESS_TIME = 0.2
+LONG_PRESS_TIME = 0.2 # in sec
 
 # Message Types
 MSG_LCD = 1
@@ -287,7 +291,6 @@ def radioInit():
         print('starting player with track {}'.format(cur_track))
     if cur_track:
         LCD_QUEUE.put((MSG_LCD, playlist_track_names[cur_track - 1]), True)
-    mpc_play_track(cur_track)
     run_cmd("mpc volume " + str(cur_vol))
     run_cmd("mpc volume +2")
     run_cmd("mpc volume -2")
@@ -295,151 +298,109 @@ def radioInit():
     return
 
 
-def play_next(mpdc):
+def mpc_next(client):
     global cur_track, total_tracks
     cur_track += 1
     if(cur_track > total_tracks):
         cur_track = 1
     if DEBUG:
-        print('playing Station ' + repr(cur_track))
-    mpdc['client'].next()
+        print('Next track: ' + repr(cur_track))
+    client.next()
     return True
 
 
-def play_prev(mpdc):
+def mpc_prev(client):
     global cur_track, total_tracks
     cur_track -= 1
     if(cur_track < 1):
         cur_track = total_tracks
+    client.previous()
     if DEBUG:
-        print('playing Station ' + repr(cur_track))
-    mpdc['client'].previous()
+        print('Prev track: ' + repr(cur_track))
     return True
 
 
-def volUp(amt):
+def mpc_vol_up(client, amt):
     global cur_vol
     if(cur_vol <= (100-amt)):
-        output = run_cmd("mpc volume +"+str(amt))
         cur_vol += amt
+        client.setvol(cur_vol)
         if DEBUG:
             print('Setting Volume ' + repr(cur_vol))
         return True
     return False
 
 
-def volDown(amt):
+def mpc_vol_down(client, amt):
     global cur_vol
     if(cur_vol >= amt):
-        output = run_cmd("mpc volume -"+str(amt))
         cur_vol -= amt
+        client.setvol(cur_vol)
         if DEBUG:
             print('Setting Volume ' + repr(cur_vol))
         return True
     return False
+
+
+def mpc_pause(client, pause):
+    client.pause(pause)
+    if DEBUG:
+        print('Setting Volume ' + repr(cur_vol))
+    return True
 
 
 # Inside a playlist manage the buttons to play nex prev track
-def playListPlay(mpdc):
+def playModeKeyMon(mpdc):
     global spd_vol, set_vol, cur_vol, cur_track, total_tracks
     global playlist_track_names, cfgParser, INI_FILE
 
-    LCD_QUEUE.put((MSG_LCD, playlist_track_names[cur_track - 1]), True)
-    countdown_to_play = 0
-    showTime = False
-    timeSinceLastDisplayChange = 0
-
     if DEBUG:
-        print('inside playListPlay - flushing')
+        print('inside playModeKeyMon - flushing')
     flush_buttons()
-    # Main loop
+
+    # pause should come from a global
+    pause = 0
+    client = mpdc['client']
+
     while True:
         press = read_buttons()
 
+        # SELECT button long pressed
+        if(press == (LONG_PRESS|SELECT)):
+            return  # Return back to main menu
+
+        # extre steps to handle the situation where the client
+        # connection seems to timeout while waiting
+        try:
+            client.status()
+        except ConnectionError:
+            client.close()
+            client.connect("localhost", 6600)  # connect to localhost:6600
+        except Exception as e:
+            print('Exception: {}'.format(e))
+            break
+
+        press &= 0x7F # mask out the long press bit
         # SELECT button pressed
         if(press == SELECT):
-            return  # Return back to main menu
+            mpc_pause(client, pause)
+            pause = 0 if pause else 1
 
         # LEFT button pressed
         if(press == LEFT):
-            play_prev(mpdc)
-            LCD_QUEUE.put((MSG_LCD, playlist_track_names[cur_track - 1]),
-                          block=True)
-            showTime = False
-            timeSinceLastDisplayChange = 0
+            mpc_prev(client)
 
         # RIGHT button pressed
         if(press == RIGHT):
-            play_next(mpdc)
-            LCD_QUEUE.put((MSG_LCD, playlist_track_names[cur_track - 1]),
-                          block=True)
-            showTime = False
-            timeSinceLastDisplayChange = 0
+            mpc_next(client)
 
         # UP button pressed
         if(press == UP):
-            set_vol = volUp(2)
+            mpc_vol_up(client, 2)
 
         # DOWN button pressed
         if(press == DOWN):
-            set_vol = volDown(2)
-
-        # UP/DOWN volume change show bar on LCD
-        if set_vol is True:
-            timeSinceLastDisplayChange = 0
-            # Display the volume as a bar
-            nSolid = int((cur_vol - min_vol) / vol_solbar)
-            fracV = (cur_vol - min_vol) % vol_solbar
-            nVertLines = int(round(fracV / vol_line))
-            s = (chr(6) + ' Volume ' +  # ^ Volume string
-                 chr(5) * nSolid +  # Solid brick(s)
-                 chr(nVertLines) +  # Fractional brick
-                 chr(0) * (6 - nSolid))  # Spaces
-            if DEBUG:
-                # print('vol_solbar = ' + str (vol_solbar) + '\n')
-                # print('vol_line = ' + str (vol_line) + '\n')
-                print('cur_vol = ' + str(cur_vol))
-                print('nSolid = ' + str(nSolid))
-                print('nVertLines = ' + str(nVertLines))
-            LCD_QUEUE.put((MSG_LCD,
-                           playlist_track_names[cur_track - 1].split()[0] +
-                          "\n" + s), block=True)
-            spd_vol = 1.0
-            set_vol = False
-        # Volume-setting mode now active (or was already there);
-        # act on button press.
-        if press == UP:
-            new_vol = cur_vol + spd_vol
-            if new_vol > max_vol:
-                new_vol = max_vol
-        else:
-            new_vol = cur_vol - spd_vol
-            if new_vol < min_vol:
-                new_vol = min_vol
-        # volTime   = time.time() # Time of last volume button press
-        # spd_vol *= 1.15        # Accelerate volume change
-        #     elif set_vol:
-        #         spd_vol = 1.0 # Buttons released = reset volume speed
-        #         # If no interaction in 4 seconds, return to prior state.
-        #         # Volume bar will be erased by subsequent operations.
-        #         if (time.time() - volTime) >= 4:
-        #             set_vol = False
-        #             if paused: drawPaused()
-
-        delay_milliseconds(99)
-        timeSinceLastDisplayChange += 99
-        if (showTime):
-            if (timeSinceLastDisplayChange > 900):
-                timeSinceLastDisplayChange = 0
-                now = datetime.datetime.now()
-                LCD_QUEUE.put((MSG_LCD,
-                               playlist_track_names[cur_track - 1].
-                               split()[0] + "\n" +
-                              now.strftime('%b %d  %H:%M:%S')), block=True)
-        else:
-            if (timeSinceLastDisplayChange > 5000):
-                timeSinceLastDisplayChange = 0
-                showTime = True
+            mpc_vol_down(client, 2)
 
 
 def flush_buttons():
@@ -449,6 +410,10 @@ def flush_buttons():
 
 def read_buttons():
     buttons = LCD.buttons()
+
+    if not buttons:
+        return 0
+
     # Debounce push buttons
     time_1 = time.time()
     time_2 = time_1
@@ -602,7 +567,7 @@ def display_ipaddr():
             if muting:
                 # amixer command not working, can't use next line
                 # output = run_cmd("amixer -q cset numid=2 1")
-                mpc_play_track(cur_track)
+                # mpc_play_track(cur_track)
                 # work around a problem.  Play always starts at full volume
                 delay_milliseconds(400)
                 output = run_cmd("mpc volume +2")
@@ -631,8 +596,8 @@ def mpc_play():
     utils.cmd.cmd_oe('mpc play')
 
 
-def mpc_play_track(cur_track):
-    utils.cmd.cmd_oe('/usr/bin/mpc play {}'.format(cur_track))
+#def mpc_play_track(cur_track):
+#    utils.cmd.cmd_oe('/usr/bin/mpc play {}'.format(cur_track))
 
 
 # commands
@@ -1040,11 +1005,13 @@ def main():
     playListLoad(mpdc)
     radioInit()
 
+    '''
     while True:
         read_buttons()
         time.sleep(0.1)
+    '''
 
-    playListPlay(mpdc)
+    playModeKeyMon(mpdc)
 
     uiItems = Folder('root', '')
 
