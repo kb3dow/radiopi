@@ -20,8 +20,8 @@
 # 2020 Mar: Rework to allow playlists. Assume playlists are formed externally
 
 # dependancies
-from Adafruit.Adafruit_I2C          import Adafruit_I2C
-from Adafruit.Adafruit_MCP230xx     import Adafruit_MCP230XX
+from Adafruit.Adafruit_I2C import Adafruit_I2C
+from Adafruit.Adafruit_MCP230xx import Adafruit_MCP230XX
 from Adafruit.Adafruit_CharLCDPlate import Adafruit_CharLCDPlate
 import datetime
 import subprocess
@@ -29,8 +29,8 @@ import time
 import queue
 import threading
 import configparser
-#from string                import split
-from xml.dom.minidom       import *
+# from string                import split
+from xml.dom.minidom import *
 # from ListSelector          import ListSelector
 import utils.cmd
 
@@ -62,7 +62,7 @@ cur_vol = min_vol  # Current volume
 new_vol = def_vol  # 'Next' volume after interactions
 spd_vol = 1.0      # Speed of volume change (accelerates w/hold)
 set_vol = False    # True if currently setting volume
-paused  = False    # True if music is paused
+paused = False    # True if music is paused
 def_color = LCD.VIOLET
 cur_color = def_color
 bar_width = 7.0          # Vol Bar width on display
@@ -80,13 +80,13 @@ DISPLAY_COLS = 16
 locchosen = ['Laurel, MD', '39.1333', '-76.8435', 92]
 
 # Buttons
-NONE           = 0x00
-SELECT         = 0x01
-RIGHT          = 0x02
-DOWN           = 0x04
-UP             = 0x08
-LEFT           = 0x10
-UP_AND_DOWN    = 0x0C
+NONE = 0x00
+SELECT = 0x01
+RIGHT = 0x02
+DOWN = 0x04
+UP = 0x08
+LEFT = 0x10
+UP_AND_DOWN = 0x0C
 LEFT_AND_RIGHT = 0x12
 
 # Message Types
@@ -128,7 +128,9 @@ def get_mpd_info(lcd_q, client):
     try:
         cso = client.currentsong()
         cst = client.status()
-        print ('State: %s, Vol: %s, Title: %s' % (cst['state'], cst['volume'], cso['title']))
+        print('State: %s, Vol: %s, Title: %s' % (cst['state'],
+                                                 cst['volume'],
+                                                 cso['title']))
         if cst['state'] == 'play':
             state_bitmap = chr(8)
         elif cst['state'] == 'pause':
@@ -148,11 +150,12 @@ def get_mpd_info(lcd_q, client):
         raise e
 
 
-
 def mpd_poller(lcd_q):
-    client = MPDClient()               # create client object
-    client.timeout = 10                # network timeout in seconds (floats allowed), default: None
-    client.idletimeout = None          # timeout for fetching the result of the idle command is handled seperately, default: None
+    client = MPDClient()       # create client object
+    client.timeout = 10        # network timeout (S) default: None
+    # timeout for fetching the result of the idle command is handled
+    # seperately, default: None
+    client.idletimeout = None
     while True:
         client.connect("localhost", 6600)  # connect to localhost:6600
         print(client.mpd_version)          # print the MPD version
@@ -171,7 +174,7 @@ def mpd_poller(lcd_q):
         client.disconnect()                # disconnect from the server
     client.close()                     # send the close command
     client.disconnect()                # disconnect from the server
-    
+
 
 def lcd_worker(q):
     '''
@@ -214,7 +217,6 @@ def settingsLoad(mpdc, cfgp, cfgfile):
         quit()
 
 
-
 def mpdc_init(mpdc):
     client = MPDClient()
     client.timeout = mpdc['timeout']
@@ -254,10 +256,11 @@ def lcdInit():
 
 
 def radioInit():
-    global cur_track, cur_vol, total_tracks, playlist_track_names, cfgParser, INI_FILE
+    global cur_track, cur_vol,\
+        total_tracks, playlist_track_names, cfgParser, INI_FILE
 
     # Stop music player
-    #output = run_cmd("mpc stop") # NOTE: no need to stop what was playing
+    # output = run_cmd("mpc stop") # NOTE: no need to stop what was playing
 
     # Create the worker thread and make it a daemon
     lcd_thread = threading.Thread(target=lcd_worker, args=(LCD_QUEUE,))
@@ -359,14 +362,15 @@ def playListPlay(mpdc):
         if(press == LEFT):
             play_prev(mpdc)
             LCD_QUEUE.put((MSG_LCD, playlist_track_names[cur_track - 1]),
-                          block = True)
+                          block=True)
             showTime = False
             timeSinceLastDisplayChange = 0
 
         # RIGHT button pressed
         if(press == RIGHT):
             play_next(mpdc)
-            LCD_QUEUE.put((MSG_LCD, playlist_track_names[cur_track - 1]), block=True)
+            LCD_QUEUE.put((MSG_LCD, playlist_track_names[cur_track - 1]),
+                          block=True)
             showTime = False
             timeSinceLastDisplayChange = 0
 
@@ -395,7 +399,8 @@ def playListPlay(mpdc):
                 print('cur_vol = ' + str(cur_vol))
                 print('nSolid = ' + str(nSolid))
                 print('nVertLines = ' + str(nVertLines))
-            LCD_QUEUE.put((MSG_LCD, playlist_track_names[cur_track - 1].split()[0] +
+            LCD_QUEUE.put((MSG_LCD,
+                           playlist_track_names[cur_track - 1].split()[0] +
                           "\n" + s), block=True)
             spd_vol = 1.0
             set_vol = False
@@ -425,7 +430,9 @@ def playListPlay(mpdc):
             if (timeSinceLastDisplayChange > 900):
                 timeSinceLastDisplayChange = 0
                 now = datetime.datetime.now()
-                LCD_QUEUE.put((MSG_LCD, playlist_track_names[cur_track - 1].split()[0] + "\n" +
+                LCD_QUEUE.put((MSG_LCD,
+                               playlist_track_names[cur_track - 1].
+                               split()[0] + "\n" +
                               now.strftime('%b %d  %H:%M:%S')), block=True)
         else:
             if (timeSinceLastDisplayChange > 5000):
@@ -458,7 +465,8 @@ def delay_milliseconds(milliseconds):
 # ----------------------------
 
 def saveSettings():
-    global cur_track, cur_vol, total_tracks, playlist_track_names, cfgParser, INI_FILE
+    global cur_track, cur_vol, total_tracks, \
+        playlist_track_names, cfgParser, INI_FILE
     cfgParser.set('settings_section', 'volume', str(cur_vol))
     cfgParser.set('settings_section', 'station', str(cur_track))
     cfgParser.set('settings_section', 'lcdcolor', str(cur_color))
@@ -479,7 +487,7 @@ def playListLoad(mpdc):
     global cur_track, total_tracks, playlist_track_names, DEBUG
 
     playlist_track_names = []
-    #mpdc['client'].iterate = True
+    # mpdc['client'].iterate = True
     for song in mpdc['client'].playlistinfo():
         playlist_track_names.append(song['title'])
     total_tracks = len(playlist_track_names)
@@ -544,8 +552,10 @@ def display_ipaddr():
         i += 1
         # if(i % 10 == 0):
         if(i % 5 == 0):
-            LCD_QUEUE.put((MSG_LCD, datetime.datetime.now().strftime('%b %d  %H:%M:%S\n') +
-                          ipaddr), block=True)
+            LCD_QUEUE.put((MSG_LCD,
+                           datetime.datetime.now().strftime(
+                               '%b %d  %H:%M:%S\n') +
+                           ipaddr), block=True)
 
         # Every 3 seconds, update ethernet or wi-fi IP address
         if(i == 60):
@@ -596,16 +606,17 @@ def display_ipaddr():
 
 
 def run_cmd(cmd):
-    p = subprocess.Popen (cmd,
-                shell = True,
-                stdout = subprocess.PIPE,
-                stderr = subprocess.STDOUT)
+    p = subprocess.Popen(cmd,
+                         shell=True,
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT)
     output = p.communicate()[0]
     return output
 
 
 def mpc_play():
     utils.cmd.cmd_oe('mpc play')
+
 
 def mpc_play_track(cur_track):
     utils.cmd.cmd_oe('/usr/bin/mpc play {}'.format(cur_track))
@@ -690,7 +701,9 @@ def ShowDateTime():
     LCD.clear()
     while not(LCD.buttons()):
         time.sleep(0.25)
-        LCD_QUEUE.put((MSG_LCD, time.strftime('%a %b %d %Y\n%I:%M:%S %p', time.localtime())))
+        LCD_QUEUE.put((MSG_LCD,
+                       time.strftime('%a %b %d %Y\n%I:%M:%S %p',
+                                     time.localtime())))
 
 
 '''
@@ -756,16 +769,16 @@ def waitForButton():
         # Poll all buttons once,
         # avoids repeated I2C traffic for different cases
         while 1:
-                b        = LCD.buttons()
-                btnUp    = b & (1 << LCD.UP)
-                btnDown  = b & (1 <<LCD.DOWN)
-                btnLeft  = b & (1 <<LCD.LEFT)
-                btnRight = b & (1 <<LCD.RIGHT)
-                btnSel   = b & (1 <<LCD.SELECT)
+            b = LCD.buttons()
+            btnUp = b & (1 << LCD.UP)
+            btnDown = b & (1 << LCD.DOWN)
+            btnLeft = b & (1 << LCD.LEFT)
+            btnRight = b & (1 << LCD.RIGHT)
+            btnSel = b & (1 << LCD.SELECT)
 
-                if (btnUp or btnDown or btnLeft or btnRight or btnSel):
-                        break
-                time.sleep(0.1)
+            if (btnUp or btnDown or btnLeft or btnRight or btnSel):
+                    break
+            time.sleep(0.1)
 
 
 class CommandToRun:
@@ -796,12 +809,12 @@ class CommandToRun:
                         time.sleep(0.25)
 
                 btnPressed = 0
-                b        = LCD.buttons()
-                btnUp    = b & (1 << LCD.UP)
-                btnDown  = b & (1 << LCD.DOWN)
-                btnLeft  = b & (1 << LCD.LEFT)
+                b = LCD.buttons()
+                btnUp = b & (1 << LCD.UP)
+                btnDown = b & (1 << LCD.DOWN)
+                btnLeft = b & (1 << LCD.LEFT)
                 btnRight = b & (1 << LCD.RIGHT)
-                btnSel   = b & (1 << LCD.SELECT)
+                btnSel = b & (1 << LCD.SELECT)
 
                 if btnDown:
                         btnPressed = 1
@@ -1001,7 +1014,8 @@ class Display:
 # ----------------------------
 # start things up
 def main():
-    global cur_track, cur_vol, total_tracks, playlist_track_names, cfgParser, INI_FILE
+    global cur_track, cur_vol, total_tracks, \
+        playlist_track_names, cfgParser, INI_FILE
     mpdc = {}
 
     if DEBUG:
@@ -1061,6 +1075,7 @@ def main():
 
     lcd_thread.join()
     mpd_thread.join()
+
 
 if __name__ == '__main__':
     main()
