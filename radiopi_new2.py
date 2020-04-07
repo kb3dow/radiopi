@@ -72,7 +72,7 @@ vol_line = vol_solbar / 5.0  # There are 5 vert lines per char display
 
 menufile = 'radiopi.xml'
 # set DEBUG=1 for print debug statements
-DEBUG = 1
+DEBUG = True
 DISPLAY_ROWS = 2
 DISPLAY_COLS = 16
 
@@ -88,6 +88,8 @@ UP = 0x08
 LEFT = 0x10
 UP_AND_DOWN = 0x0C
 LEFT_AND_RIGHT = 0x12
+LONG_PRESS = 0x80
+LONG_PRESS_TIME = 0.2
 
 # Message Types
 MSG_LCD = 1
@@ -448,9 +450,20 @@ def flush_buttons():
 def read_buttons():
     buttons = LCD.buttons()
     # Debounce push buttons
+    time_1 = time.time()
+    time_2 = time_1
     if(buttons != 0):
         while(LCD.buttons() != 0):
+            time_2 = time.time()
             delay_milliseconds(1)
+
+    if (time_2 - time_1) > 0.2:
+        buttons |= LONG_PRESS
+
+
+    if buttons and DEBUG:
+        print(f"Key press: {buttons:#0{4}x}")
+
     return buttons
 
 
@@ -1028,7 +1041,8 @@ def main():
     radioInit()
 
     while True:
-        time.sleep(2.5)
+        read_buttons()
+        time.sleep(0.1)
 
     playListPlay(mpdc)
 
@@ -1050,6 +1064,7 @@ def main():
     while 1:
         # Poll all buttons once, avoids repeated I2C traffic
         pressed = read_buttons()
+        pressed &= 0x7F  # we are not interested in LONG_PRESS
 
         if (pressed == LEFT):
             display.update('l')
