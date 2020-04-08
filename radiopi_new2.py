@@ -31,7 +31,6 @@ import threading
 import configparser
 # from string                import split
 from xml.dom.minidom import *
-# from ListSelector          import ListSelector
 import utils.cmd
 
 import subprocess
@@ -54,7 +53,7 @@ STATE_MENU_MODE = 1
 
 # Globals
 INI_FILE = 'radiopi.ini'
-playlist_track_names = []
+#playlist_track_names = []
 cur_playlist = ''
 cur_track = 1
 total_tracks = 0
@@ -73,6 +72,7 @@ rng_vol = max_vol - min_vol + 1
 vol_solbar = rng_vol / bar_width
 vol_line = vol_solbar / 5.0  # There are 5 vert lines per char display
 display_mode_state = 0
+mpdc = {}
 
 menufile = 'radiopi.xml'
 # set DEBUG=1 for print debug statements
@@ -131,12 +131,15 @@ charSevenBitmaps = [[0b10000,  # Play (also selected station)
 # ----------------------------
 
 def get_mpd_info(lcd_q, client):
+    global DEBUG
+
     try:
         cso = client.currentsong()
         cst = client.status()
-        print('State: %s, Vol: %s, Title: %s' % (cst['state'],
-                                                 cst['volume'],
-                                                 cso['title']))
+        if DEBUG:
+            print(cso)
+            print(cst)
+
         if cst['state'] == 'play':
             state_bitmap = chr(8)
         elif cst['state'] == 'pause':
@@ -145,7 +148,8 @@ def get_mpd_info(lcd_q, client):
         else:
             state_bitmap = chr(5)
 
-        line1 = cso['title'][:16].ljust(16, ' ')
+        line1_info = cso['title'] if 'title' in cso else cso['name']
+        line1 = line1_info[:16].ljust(16, ' ')
         line2 = '%s Vol: %s' % (state_bitmap,
                                 cst['volume'])
         line2 = line2.ljust(16, ' ')
@@ -263,7 +267,7 @@ def lcdInit():
 
 def radioInit():
     global cur_track, cur_vol,\
-        total_tracks, playlist_track_names, cfgParser, INI_FILE
+        total_tracks, cfgParser, INI_FILE
 
     # Stop music player
     # output = run_cmd("mpc stop") # NOTE: no need to stop what was playing
@@ -289,8 +293,7 @@ def radioInit():
     # Start music player
     if DEBUG:
         print('starting player with track {}'.format(cur_track))
-    if cur_track:
-        LCD_QUEUE.put((MSG_LCD, playlist_track_names[cur_track - 1]), True)
+
     run_cmd("mpc volume " + str(cur_vol))
     run_cmd("mpc volume +2")
     run_cmd("mpc volume -2")
@@ -350,9 +353,8 @@ def mpc_pause(client, pause):
 
 
 # Inside a playlist manage the buttons to play nex prev track
-def radioPlay(mpdc):
-    global spd_vol, set_vol, cur_vol, cur_track, total_tracks
-    global playlist_track_names, cfgParser, INI_FILE
+def radioPlay():
+    global mpdc
 
     if DEBUG:
         print('inside radioPlay - flushing')
@@ -376,31 +378,43 @@ def radioPlay(mpdc):
         except ConnectionError:
             client.close()
             client.connect("localhost", 6600)  # connect to localhost:6600
+            continue
         except Exception as e:
             print('Exception: {}'.format(e))
-            break
+            continue
 
         press &= 0x7F  # mask out the long press bit
-        # SELECT button pressed
-        if(press == SELECT):
-            mpc_pause(client, pause)
-            pause = 0 if pause else 1
+        try: 
+            # SELECT button pressed
+            if(press == SELECT):
+                mpc_pause(client, pause)
+                pause = 0 if pause else 1
 
-        # LEFT button pressed
-        if(press == LEFT):
-            mpc_prev(client)
+            # LEFT button pressed
+            if(press == LEFT):
+                mpc_prev(client)
 
-        # RIGHT button pressed
-        if(press == RIGHT):
-            mpc_next(client)
+            # RIGHT button pressed
+            if(press == RIGHT):
+                mpc_next(client)
 
-        # UP button pressed
-        if(press == UP):
-            mpc_vol_up(client, 2)
+            # UP button pressed
+            if(press == UP):
+                mpc_vol_up(client, 2)
 
-        # DOWN button pressed
-        if(press == DOWN):
-            mpc_vol_down(client, 2)
+            # DOWN button pressed
+            if(press == DOWN):
+                mpc_vol_down(client, 2)
+
+        '''
+        except CommandError as e:
+            print('CommandError: {}'.format(e))
+            continue
+        '''
+        except Exception as e:
+            print('Exception: {}'.format(e))
+            continue
+
 
 
 def flush_buttons():
@@ -443,7 +457,7 @@ def delay_milliseconds(milliseconds):
 
 def saveSettings():
     global cur_track, cur_vol, total_tracks, \
-        playlist_track_names, cfgParser, INI_FILE
+        cfgParser, INI_FILE
     cfgParser.set('settings_section', 'volume', str(cur_vol))
     cfgParser.set('settings_section', 'station', str(cur_track))
     cfgParser.set('settings_section', 'lcdcolor', str(cur_color))
@@ -460,10 +474,10 @@ def saveSettingsWrapper():
     time.sleep(2)
 
 
+'''
 def playListLoad(mpdc):
-    global cur_track, total_tracks, playlist_track_names, DEBUG
+    global cur_track, total_tracks, DEBUG
 
-    playlist_track_names = []
     # mpdc['client'].iterate = True
     for song in mpdc['client'].playlistinfo():
         playlist_track_names.append(song['title'])
@@ -475,19 +489,8 @@ def playListLoad(mpdc):
     if DEBUG:
         print(playlist_track_names)
         print(mpdc['client'].status())
+'''
 
-    '''
-    # OLD WAY
-    playlist_track_names = []
-    o, e = utils.cmd.cmd_oe('mpc playlist')
-    playlist_track_names = o.copy()
-    total_tracks = len(playlist_track_names)
-    o, e = utils.cmd.cmd_oe('mpc current')
-    try:
-        cur_track = o[1].split(' ')[1][1:].split('/')[0]
-    except IndexError:
-        cur_track = 1
-    '''
 
 
 # ----------------------------
@@ -589,14 +592,6 @@ def run_cmd(cmd):
                          stderr=subprocess.STDOUT)
     output = p.communicate()[0]
     return output
-
-
-def mpc_play():
-    utils.cmd.cmd_oe('mpc play')
-
-
-# def mpc_play_track(cur_track):
-#     utils.cmd.cmd_oe('/usr/bin/mpc play {}'.format(cur_track))
 
 
 # commands
@@ -872,6 +867,7 @@ class Display:
         self.curFolder = folder
         self.curTopItem = 0
         self.curSelectedItem = 0
+        # Map keys hit to functions
         self.upd_table = {LEFT: self.left,
                           RIGHT: self.right,
                           UP: self.up,
@@ -912,22 +908,8 @@ class Display:
         LCD_QUEUE.put((MSG_LCD, str), block=True)
 
     def update(self, key):
-        if DEBUG:
-            print('do', key)
         if key in self.upd_table:
             self.upd_table[key]()
-        '''
-        if command == 'u':
-            self.up()
-        elif command == 'd':
-            self.down()
-        elif command == 'r':
-            self.right()
-        elif command == 'l':
-            self.left()
-        elif command == 's':
-            self.select()
-        '''
 
     def up(self):
         if self.curSelectedItem == 0:
@@ -1002,8 +984,8 @@ class Display:
 # start things up
 def main():
     global cur_track, cur_vol, total_tracks, \
-        playlist_track_names, cfgParser, INI_FILE
-    mpdc = {}
+        cfgParser, INI_FILE,\
+        mpdc
 
     if DEBUG:
         print('entering main()')
@@ -1011,10 +993,10 @@ def main():
     settingsLoad(mpdc, cfgParser, INI_FILE)
     mpdc_init(mpdc)
     lcdInit()
-    playListLoad(mpdc)
+    # playListLoad(mpdc)
     radioInit()
 
-    radioPlay(mpdc)
+    radioPlay()
 
     uiItems = Folder('root', '')
 
@@ -1036,31 +1018,11 @@ def main():
         pressed = read_buttons()
         pressed &= 0x7F  # we are not interested in LONG_PRESS
 
-        display.update(pressed)
-        display.display()
-        '''
-        if (pressed == LEFT):
-            display.update('l')
+        if (pressed):
+            display.update(pressed)
             display.display()
+        time.sleep(0.15)
 
-        if (pressed == UP):
-            display.update('u')
-            display.display()
-
-        if (pressed == DOWN):
-            display.update('d')
-            display.display()
-
-        if (pressed == RIGHT):
-            display.update('r')
-            display.display()
-
-        if (pressed == SELECT):
-            display.update('s')
-            display.display()
-        '''
-
-    time.sleep(0.15)
 
     lcd_thread.join()
     mpd_thread.join()
