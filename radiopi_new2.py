@@ -93,7 +93,7 @@ LEFT = 0x10
 UP_AND_DOWN = 0x0C
 LEFT_AND_RIGHT = 0x12
 LONG_PRESS = 0x80
-LONG_PRESS_TIME = 0.2 # in sec
+LONG_PRESS_TIME = 0.2  # in sec
 
 # Message Types
 MSG_LCD = 1
@@ -350,12 +350,12 @@ def mpc_pause(client, pause):
 
 
 # Inside a playlist manage the buttons to play nex prev track
-def playModeKeyMon(mpdc):
+def radioPlay(mpdc):
     global spd_vol, set_vol, cur_vol, cur_track, total_tracks
     global playlist_track_names, cfgParser, INI_FILE
 
     if DEBUG:
-        print('inside playModeKeyMon - flushing')
+        print('inside radioPlay - flushing')
     flush_buttons()
 
     # pause should come from a global
@@ -366,7 +366,7 @@ def playModeKeyMon(mpdc):
         press = read_buttons()
 
         # SELECT button long pressed
-        if(press == (LONG_PRESS|SELECT)):
+        if(press == (LONG_PRESS | SELECT)):
             return  # Return back to main menu
 
         # extre steps to handle the situation where the client
@@ -380,7 +380,7 @@ def playModeKeyMon(mpdc):
             print('Exception: {}'.format(e))
             break
 
-        press &= 0x7F # mask out the long press bit
+        press &= 0x7F  # mask out the long press bit
         # SELECT button pressed
         if(press == SELECT):
             mpc_pause(client, pause)
@@ -424,7 +424,6 @@ def read_buttons():
 
     if (time_2 - time_1) > 0.2:
         buttons |= LONG_PRESS
-
 
     if buttons and DEBUG:
         print(f"Key press: {buttons:#0{4}x}")
@@ -596,8 +595,8 @@ def mpc_play():
     utils.cmd.cmd_oe('mpc play')
 
 
-#def mpc_play_track(cur_track):
-#    utils.cmd.cmd_oe('/usr/bin/mpc play {}'.format(cur_track))
+# def mpc_play_track(cur_track):
+#     utils.cmd.cmd_oe('/usr/bin/mpc play {}'.format(cur_track))
 
 
 # commands
@@ -873,6 +872,12 @@ class Display:
         self.curFolder = folder
         self.curTopItem = 0
         self.curSelectedItem = 0
+        self.upd_table = {LEFT: self.left,
+                          RIGHT: self.right,
+                          UP: self.up,
+                          DOWN: self.down,
+                          SELECT: self.select
+                          }
 
     def display(self):
         if self.curTopItem > len(self.curFolder.items) - DISPLAY_ROWS:
@@ -906,9 +911,12 @@ class Display:
             print('------------------')
         LCD_QUEUE.put((MSG_LCD, str), block=True)
 
-    def update(self, command):
+    def update(self, key):
         if DEBUG:
-            print('do', command)
+            print('do', key)
+        if key in self.upd_table:
+            self.upd_table[key]()
+        '''
         if command == 'u':
             self.up()
         elif command == 'd':
@@ -919,6 +927,7 @@ class Display:
             self.left()
         elif command == 's':
             self.select()
+        '''
 
     def up(self):
         if self.curSelectedItem == 0:
@@ -1005,13 +1014,7 @@ def main():
     playListLoad(mpdc)
     radioInit()
 
-    '''
-    while True:
-        read_buttons()
-        time.sleep(0.1)
-    '''
-
-    playModeKeyMon(mpdc)
+    radioPlay(mpdc)
 
     uiItems = Folder('root', '')
 
@@ -1033,6 +1036,9 @@ def main():
         pressed = read_buttons()
         pressed &= 0x7F  # we are not interested in LONG_PRESS
 
+        display.update(pressed)
+        display.display()
+        '''
         if (pressed == LEFT):
             display.update('l')
             display.display()
@@ -1052,6 +1058,7 @@ def main():
         if (pressed == SELECT):
             display.update('s')
             display.display()
+        '''
 
     time.sleep(0.15)
 
