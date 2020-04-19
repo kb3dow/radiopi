@@ -140,13 +140,14 @@ def get_mpd_info(lcd_q, client):
             print(cso)
             print(cst)
 
-        if cst['state'] == 'play':
-            state_bitmap = chr(8)
-        elif cst['state'] == 'pause':
-            state_bitmap = chr(7)
+        # show the symbol if it is in play/stop/pause
+        if 'state' in cst and cst['state'] == 'play':
+            state_bitmap = chr(8)  # play symbol
+        elif 'state' in cst and cst['state'] == 'pause':
+            state_bitmap = chr(7)  # pause symbol
         # elif cst['state'] == 'stop':
         else:
-            state_bitmap = chr(5)
+            state_bitmap = chr(5)  # stop symbol
 
         line1_info = cso['title'] if 'title' in cso else cso['name']
         line1 = line1_info[:16].ljust(16, ' ')
@@ -165,7 +166,7 @@ def mpd_poller(lcd_q):
     client.timeout = 10        # network timeout (S) default: None
     # timeout for fetching the result of the idle command is handled
     # seperately, default: None
-    client.idletimeout = None
+    client.idletimeout = 60
     while True:
         client.connect("localhost", 6600)  # connect to localhost:6600
         print(client.mpd_version)          # print the MPD version
@@ -173,9 +174,9 @@ def mpd_poller(lcd_q):
         while True:
             try:
                 changes = client.idle()
-                for change in changes:
-                    if change == 'player' or change == 'mixer':
-                        get_mpd_info(lcd_q, client)
+                # if 'player' in change or 'mixer' in change:
+                    # get_mpd_info(lcd_q, client)
+                get_mpd_info(lcd_q, client)
 
             except Exception as e:
                 print('Exception: {}'.format(e))
@@ -406,15 +407,15 @@ def radioPlay():
             if(press == DOWN):
                 mpc_vol_down(client, 2)
 
-        '''
-        except CommandError as e:
-            print('CommandError: {}'.format(e))
-            continue
-        '''
+            '''
+            except CommandError as e:
+                print('CommandError: {}'.format(e))
+                continue
+            '''
+
         except Exception as e:
             print('Exception: {}'.format(e))
             continue
-
 
 
 def flush_buttons():
