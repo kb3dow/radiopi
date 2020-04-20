@@ -33,11 +33,12 @@ import configparser
 from xml.dom.minidom import *
 import utils.cmd
 
+import socket
 import subprocess
 import smbus
 import time
 
-from mpd import MPDClient
+from mpd import (MPDClient, MPDError, ConnectionError)
 
 # initialize the LCD plate
 #   use busnum = 0 for raspi version 1 (256MB)
@@ -130,6 +131,7 @@ charSevenBitmaps = [[0b10000,  # Play (also selected station)
 # WORKER THREADS
 # ----------------------------
 
+# Show what is playing on the lcd screen
 def get_mpd_info(lcd_q, client):
     global DEBUG
 
@@ -161,6 +163,7 @@ def get_mpd_info(lcd_q, client):
         raise e
 
 
+# Keep track of what is playing by polling and displaying
 def mpd_poller(lcd_q):
     client = MPDClient()       # create client object
     client.timeout = 10        # network timeout (S) default: None
@@ -377,7 +380,8 @@ def radioPlay():
         try:
             client.status()
         except ConnectionError:
-            client.close()
+            # client.close()  # doing a close under error condition causes
+            # error again
             client.connect("localhost", 6600)  # connect to localhost:6600
             continue
         except Exception as e:
@@ -475,23 +479,15 @@ def saveSettingsWrapper():
     time.sleep(2)
 
 
-'''
-def playListLoad(mpdc):
-    global cur_track, total_tracks, DEBUG
-
-    # mpdc['client'].iterate = True
-    for song in mpdc['client'].playlistinfo():
-        playlist_track_names.append(song['title'])
-    total_tracks = len(playlist_track_names)
-
-    status = mpdc['client'].status()
-    cur_track = int(status['song']) + 1
-
-    if DEBUG:
-        print(playlist_track_names)
-        print(mpdc['client'].status())
-'''
-
+def loadPlaylists(mpdc):
+    print('available playlists')
+    for t in mpdc['client'].listplaylists():
+        print(t)
+    print('current playlist')
+    print(mpdc['client'].playlist())
+    print('playlistinfo:-')
+    for t in mpdc['client'].playlistinfo():
+        print(t)
 
 
 # ----------------------------
@@ -514,15 +510,14 @@ def audioAuto():
 
 
 def display_ipaddr():
-    global cur_vol, cur_color
+    global cur_color
 
-    show_wlan0 = "ip addr show wlan0 | cut -d/ -f1 | \
-            awk '/inet/ {printf \"w%15.15s\", $2}'"
-    show_eth0 = "ip addr show eth0  | cut -d/ -f1 | \
-            awk '/inet/ {printf \"e%15.15s\", $2}'"
-    ipaddr = run_cmd(show_eth0)
-    if ipaddr == "":
-        ipaddr = run_cmd(show_wlan0)
+    # connect to google dns server and find the address
+    # this shows the address of the link with the default route
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.connect(("8.8.8.8", 80))
+    ip_addr = s.getsockname()[0].ljust(16, ' ')
+    s.close()
 
     LCD.backlight(LCD.VIOLET)
     i = 29
@@ -531,55 +526,19 @@ def display_ipaddr():
     while (keep_looping):
         # Every 1/2 second, update the time display
         i += 1
-        # if(i % 10 == 0):
         if(i % 5 == 0):
             LCD_QUEUE.put((MSG_LCD,
                            datetime.datetime.now().strftime(
                                '%b %d  %H:%M:%S\n') +
-                           ipaddr), block=True)
-
-        # Every 3 seconds, update ethernet or wi-fi IP address
-        if(i == 60):
-            ipaddr = run_cmd(show_eth0)
-            i = 0
-        elif(i == 30):
-            ipaddr = run_cmd(show_wlan0)
+                           str(ip_addr)), block=True)
 
         # Every 100 milliseconds, read the switches
         press = read_buttons()
         # Take action on switch press
 
-        # UP button pressed
-        if(press == UP):
-            output = run_cmd("mpc volume +2")
-            if(cur_vol < 99):
-                cur_vol += 2
-
-        # DOWN button pressed
-        if(press == DOWN):
-            output = run_cmd("mpc volume -2")
-            if(cur_vol > 1):
-                cur_vol -= 2
-
         # SELECT button = exit
-        if(press == SELECT):
+        if(press):
             keep_looping = False
-
-        # LEFT or RIGHT toggles mute
-        elif(press == LEFT or press == RIGHT):
-            if muting:
-                # amixer command not working, can't use next line
-                # output = run_cmd("amixer -q cset numid=2 1")
-                # mpc_play_track(cur_track)
-                # work around a problem.  Play always starts at full volume
-                delay_milliseconds(400)
-                output = run_cmd("mpc volume +2")
-                output = run_cmd("mpc volume -2")
-            else:
-                # amixer command not working, can't use next line
-                # output = run_cmd("amixer -q cset numid=2 0")
-                output = run_cmd("mpc stop")
-            muting = not muting
 
         delay_milliseconds(99)
 
@@ -984,7 +943,7 @@ class Display:
 # ----------------------------
 # start things up
 def main():
-    global cur_track, cur_vol, total_tracks, \
+    global cur_track, total_tracks, \
         cfgParser, INI_FILE,\
         mpdc
 
@@ -994,7 +953,6 @@ def main():
     settingsLoad(mpdc, cfgParser, INI_FILE)
     mpdc_init(mpdc)
     lcdInit()
-    # playListLoad(mpdc)
     radioInit()
 
     radioPlay()
@@ -1007,6 +965,7 @@ def main():
     top = dom.documentElement
 
     ProcessNode(top, uiItems)
+    loadPlaylists(mpdc)
 
     display = Display(uiItems)
     display.display()
