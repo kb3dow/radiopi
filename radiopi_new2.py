@@ -151,7 +151,13 @@ def get_mpd_info(lcd_q, client):
         else:
             state_bitmap = chr(5)  # stop symbol
 
-        line1_info = cso['title'] if 'title' in cso else cso['name']
+        if 'title' in cso:
+            line1_info = cso['title']
+        elif 'name' in cso:
+            line1_info = cso['name']
+        else:
+            line1_info = ''
+
         line1 = line1_info[:16].ljust(16, ' ')
         line2 = '%s Vol: %s' % (state_bitmap,
                                 cst['volume'])
@@ -165,6 +171,7 @@ def get_mpd_info(lcd_q, client):
 
 # Keep track of what is playing by polling and displaying
 def mpd_poller(lcd_q):
+    global DEBUG
     client = MPDClient()       # create client object
     client.timeout = 10        # network timeout (S) default: None
     # timeout for fetching the result of the idle command is handled
@@ -172,8 +179,8 @@ def mpd_poller(lcd_q):
     client.idletimeout = 60
     while True:
         client.connect("localhost", 6600)  # connect to localhost:6600
-        print(client.mpd_version)          # print the MPD version
-        print(client.status())
+        if DEBUG
+            print(client.status())
         while True:
             try:
                 changes = client.idle()
@@ -357,7 +364,7 @@ def mpc_pause(client, pause):
 
 
 # Inside a playlist manage the buttons to play nex prev track
-def radioPlay():
+def radioPlay(**kwargs):
     global mpdc
 
     if DEBUG:
@@ -471,7 +478,7 @@ def saveSettings():
         cfgParser.write(configfile)
 
 
-def saveSettingsWrapper():
+def saveSettingsWrapper(**kwargs):
     LCD_QUEUE.put((MSG_LCD, "Saving          \nSettings ...    "), block=True)
     saveSettings()
     time.sleep(1)
@@ -480,36 +487,40 @@ def saveSettingsWrapper():
 
 
 def loadPlaylists(mpdc):
-    print('available playlists')
-    for t in mpdc['client'].listplaylists():
-        print(t)
-    print('current playlist')
-    print(mpdc['client'].playlist())
-    print('playlistinfo:-')
-    for t in mpdc['client'].playlistinfo():
-        print(t)
+    if DEBUG:
+        print('available playlists')
+        for t in mpdc['client'].listplaylists():
+            print(t)
+
+        print('current playlist')
+        print(mpdc['client'].playlist())
+        print('playlistinfo:-')
+
+        for t in mpdc['client'].playlistinfo():
+            print(t)
+    return
 
 
 # ----------------------------
 # RADIO SETUP MENU
 # ----------------------------
 
-def audioHdmi():
+def audioHdmi(**kwargs):
     # audio output to headphone jack
     output = run_cmd("amixer -q cset numid=3 1")
 
 
-def audioHphone():
+def audioHphone(**kwargs):
     # audio output to HDMI port
     run_cmd("amixer -q cset numid=3 2")
 
 
-def audioAuto():
+def audioAuto(**kwargs):
     # audio output auto-select
     run_cmd("amixer -q cset numid=3 0")
 
 
-def display_ipaddr():
+def display_ipaddr(**kwargs):
     global cur_color
 
     # connect to google dns server and find the address
@@ -555,7 +566,7 @@ def run_cmd(cmd):
 
 
 # commands
-def DoQuit():
+def DoQuit(**kwargs):
     LCD.clear()
     LCD.message('Are you sure?\nPress Sel for Y')
     while 1:
@@ -568,7 +579,7 @@ def DoQuit():
         time.sleep(0.25)
 
 
-def DoShutdown():
+def DoShutdown(**kwargs):
     LCD.clear()
     LCD.message('Are you sure?\nPress Sel for Y')
     while 1:
@@ -583,53 +594,29 @@ def DoShutdown():
         time.sleep(0.25)
 
 
-def LcdOff():
+def LcdOff(**kwargs):
     LCD.backlight(LCD.OFF)
 
 
-def LcdOn():
+def LcdOn(**kwargs):
     LCD.backlight(LCD.ON)
 
 
-def LcdRed():
+# Set the LCD color, kwargs has a key called 'text'
+# that is displayed on the lcd menu and used to set the color
+# on the physical lcd
+def LcdColorSet(**kwargs):
     global cur_color
-    cur_color = LCD.RED
-    LCD.backlight(cur_color)
+    text_to_color = {'Red': LCD.RED, 'Green': LCD.GREEN, 'Blue': LCD.BLUE,
+        'Yellow': LCD.YELLOW, 'Teal': LCD.TEAL, 'Violet': LCD.VIOLET, }
 
+    if 'text' in kwargs and kwargs['text'] in text_to_color:
+        if DEBUG:
+            print('setting LCD to {}'.format(kwargs['text']))
+        cur_color = text_to_color[kwargs['text']]
+        LCD.backlight(cur_color)
 
-def LcdGreen():
-    global cur_color
-    cur_color = LCD.GREEN
-    LCD.backlight(cur_color)
-
-
-def LcdBlue():
-    global cur_color
-    cur_color = LCD.BLUE
-    LCD.backlight(cur_color)
-
-
-def LcdYellow():
-    global cur_color
-    cur_color = LCD.YELLOW
-    LCD.backlight(cur_color)
-
-
-def LcdTeal():
-    global cur_color
-    cur_color = LCD.TEAL
-    LCD.backlight(cur_color)
-
-
-def LcdViolet():
-    global cur_color
-    cur_color = LCD.VIOLET
-    LCD.backlight(cur_color)
-
-
-def ShowDateTime():
-    if DEBUG:
-        print('in ShowDateTime')
+def ShowDateTime(**kwargs):
     LCD.clear()
     while not(LCD.buttons()):
         time.sleep(0.25)
@@ -640,13 +627,13 @@ def ShowDateTime():
 
 '''
 # NOTE: NOT-USED YET
-def SetDateTime():
+def SetDateTime(**kwargs):
     if DEBUG:
         print('in SetDateTime')
 
 
 # NOTE: NOT-USED YET
-def ShowIPAddress():
+def ShowIPAddress(**kwargs):
     if DEBUG:
         print('in ShowIPAddress')
     LCD.clear()
@@ -657,25 +644,6 @@ def ShowIPAddress():
             break
         time.sleep(0.25)
 '''
-
-
-# only use the following if you find useful
-def Use10Network():
-    "Allows you to switch to a different network for local connection"
-    LCD.clear()
-    LCD.message('Are you sure?\nPress Sel for Y')
-    while 1:
-        if LCD.buttonPressed(LCD.LEFT):
-            break
-        if LCD.buttonPressed(LCD.SELECT):
-            # uncomment the following once you have a separate network defined
-            # commands.getoutput("sudo cp /etc/network/interfaces.hub.10"
-            # "/etc/network/interfaces")
-            LCD.clear()
-            LCD.message('Please reboot')
-            time.sleep(1.5)
-            break
-        time.sleep(0.25)
 
 
 # only use the following if you find useful
@@ -713,6 +681,7 @@ def waitForButton():
             time.sleep(0.1)
 
 
+'''
 class CommandToRun:
     def __init__(self, myName, theCommand):
         self.text = myName
@@ -759,12 +728,14 @@ class CommandToRun:
                 elif btnLeft:
                         btnPressed = 1
                         break
+'''
 
 
 class Widget:
-    def __init__(self, myName, myFunction):
+    def __init__(self, myName, myFunction, kwargs):
         self.text = myName
         self.function = myFunction
+        self.kwargs = kwargs
 
 
 class Folder:
@@ -774,6 +745,7 @@ class Folder:
         self.parent = myParent
 
 
+'''
 def HandleSettings(node):
     global LCD
     if DEBUG:
@@ -796,28 +768,41 @@ def HandleSettings(node):
         LCD.backlight(LCD.ON)
     elif node.getAttribute('lcdBacklight').lower() == 'off':
         LCD.backlight(LCD.OFF)
+'''
 
 
 def ProcessNode(currentNode, currentItem):
+    '''
+    currentNode is a dom.documentElement - a folder node from xml
+    currentItem is of type Folder into which items from currentNode are to be
+        added
+    '''
     global cur_color
     children = currentNode.childNodes
 
     for child in children:
         if isinstance(child, xml.dom.minidom.Element):
-            if child.tagName == 'settings':
-                HandleSettings(child)
-            elif child.tagName == 'folder':
+            d = {}
+            for a in child.attributes.values():
+                d[a.name] = a.value
+
+            if child.tagName == 'folder':
                 thisFolder = Folder(child.getAttribute('text'), currentItem)
                 currentItem.items.append(thisFolder)
                 ProcessNode(child, thisFolder)
             elif child.tagName == 'widget':
                 thisWidget = Widget(child.getAttribute('text'),
-                                    child.getAttribute('function'))
+                                    child.getAttribute('function'),
+                                    d)
                 currentItem.items.append(thisWidget)
+            '''
             elif child.tagName == 'run':
                 thisCommand = CommandToRun(child.getAttribute('text'),
                                            child.firstChild.data)
                 currentItem.items.append(thisCommand)
+            elif child.tagName == 'settings':
+                HandleSettings(child)
+            '''
 
     LCD.backlight(cur_color)
 
@@ -919,10 +904,12 @@ class Display:
             if DEBUG:
                 print('eval',
                       self.curFolder.items[self.curSelectedItem].function)
-            eval(self.curFolder.items[self.curSelectedItem].function+'()')
-        elif isinstance(self.curFolder.items[self.curSelectedItem],
-                        CommandToRun):
+            eval(self.curFolder.items[self.curSelectedItem].function+\
+                '(**self.curFolder.items[self.curSelectedItem].kwargs)')
+        '''
+        elif isinstance(self.curFolder.items[self.curSelectedItem], CommandToRun):
             self.curFolder.items[self.curSelectedItem].Run()
+        '''
 
     def select(self):
         if DEBUG:
@@ -935,7 +922,8 @@ class Display:
             if DEBUG:
                 print('eval',
                       self.curFolder.items[self.curSelectedItem].function)
-            eval(self.curFolder.items[self.curSelectedItem].function+'()')
+            eval(self.curFolder.items[self.curSelectedItem].function+\
+                '(**self.curFolder.items[self.curSelectedItem].kwargs)')
 
 
 # ----------------------------
@@ -955,7 +943,7 @@ def main():
     lcdInit()
     radioInit()
 
-    radioPlay()
+    radioPlay(**{})
 
     uiItems = Folder('root', '')
 
