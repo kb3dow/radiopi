@@ -365,9 +365,10 @@ def mpc_toggle_pause(client):
     status = client.status()
     state = status['state']
     # if state is pause/stop then play. If play then pause
-    client.pause(0 if state == 'play' else 1)
+    pause = 1 if state == 'play' else 0
+    client.pause(pause)
     if DEBUG:
-        print('Pausing player: %s'%(pause))
+        print('Toggling play/pause')
     return True
 
 
