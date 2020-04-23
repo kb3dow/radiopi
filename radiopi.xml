@@ -11,12 +11,12 @@
     <widget text="IP Address" function="display_ipaddr" />
     <widget text="Show Date/Time" function="ShowDateTime" />
     <folder text="LCD Color">
-      <widget text="Red" function="LcdColorSet" />
-      <widget text="Green" function="LcdColorSet" />
-      <widget text="Blue" function="LcdColorSet" />
-      <widget text="Yellow" function="LcdColorSet" />
-      <widget text="Teal" function="LcdColorSet" />
-      <widget text="Violet" function="LcdColorSet" />
+      <widget text="Red" function="SetLcdColor" />
+      <widget text="Green" function="SetLcdColor" />
+      <widget text="Blue" function="SetLcdColor" />
+      <widget text="Yellow" function="SetLcdColor" />
+      <widget text="Teal" function="SetLcdColor" />
+      <widget text="Violet" function="SetLcdColor" />
     </folder>
   </folder>
   <folder text="Audio Settings">

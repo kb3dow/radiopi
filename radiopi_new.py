@@ -288,12 +288,12 @@ def radioInit():
     # Stop music player
     # output = run_cmd("mpc stop") # NOTE: no need to stop what was playing
 
-    # Create the worker thread and make it a daemon
+    # Create the lcd update worker thread and make it a daemon
     lcd_thread = threading.Thread(target=lcd_worker, args=(LCD_QUEUE,))
     lcd_thread.setDaemon(True)
     lcd_thread.start()
 
-    # Create the 2nd worker thread and make it a daemon
+    # Create the 2nd worker thread polling mpd and make it a daemon
     mpd_thread = threading.Thread(target=mpd_poller, args=(LCD_QUEUE,))
     mpd_thread.setDaemon(True)
     mpd_thread.start()
@@ -323,7 +323,7 @@ def mpc_next(client):
     if(cur_track > total_tracks):
         cur_track = 1
     if DEBUG:
-        print('Next track: ' + repr(cur_track))
+        print('Track %d'%(cur_track))
     client.next()
     return True
 
@@ -335,36 +335,39 @@ def mpc_prev(client):
         cur_track = total_tracks
     client.previous()
     if DEBUG:
-        print('Prev track: ' + repr(cur_track))
+        print('Track %d'%(cur_track))
     return True
 
 
-def mpc_vol_up(client, amt):
+def mpc_vol_up(client, amt=5):
     global cur_vol
     if(cur_vol <= (100-amt)):
         cur_vol += amt
         client.setvol(cur_vol)
         if DEBUG:
-            print('Setting Volume ' + repr(cur_vol))
+            print('Setting Volume %d'%(cur_vol))
         return True
     return False
 
 
-def mpc_vol_down(client, amt):
+def mpc_vol_down(client, amt=5):
     global cur_vol
     if(cur_vol >= amt):
         cur_vol -= amt
         client.setvol(cur_vol)
         if DEBUG:
-            print('Setting Volume ' + repr(cur_vol))
+            print('Setting Volume %d'%(cur_vol))
         return True
     return False
 
 
-def mpc_pause(client, pause):
-    client.pause(pause)
+def mpc_toggle_pause(client):
+    status = client.status()
+    state = status['state']
+    # if state is pause/stop then play. If play then pause
+    client.pause(0 if state == 'play' else 1)
     if DEBUG:
-        print('Setting Volume ' + repr(cur_vol))
+        print('Pausing player: %s'%(pause))
     return True
 
 
@@ -374,17 +377,22 @@ def playerMode(**kwargs):
 
     if DEBUG:
         print('inside playerMode - flushing')
+
+    button_table = { SELECT: mpc_toggle_pause, LEFT: mpc_prev, RIGHT: mpc_next,
+        UP: mpc_vol_up, DOWN: mpc_vol_down}
     display_mode_state_old = display_mode_state
     display_mode_state = LCD_PLAYER_MODE
 
     flush_buttons()
 
-    # pause should come from a global
-    pause = 0
     client = mpdc['client']
 
     while True:
         press = read_buttons()
+
+        if not press:
+            time.sleep(0.1)
+            continue
 
         # SELECT button long pressed
         if(press == (LONG_PRESS | SELECT)):
@@ -405,32 +413,9 @@ def playerMode(**kwargs):
 
         press &= 0x7F  # mask out the long press bit
         try: 
-            # SELECT button pressed
-            if(press == SELECT):
-                mpc_pause(client, pause)
-                pause = 0 if pause else 1
-
-            # LEFT button pressed
-            if(press == LEFT):
-                mpc_prev(client)
-
-            # RIGHT button pressed
-            if(press == RIGHT):
-                mpc_next(client)
-
-            # UP button pressed
-            if(press == UP):
-                mpc_vol_up(client, 2)
-
-            # DOWN button pressed
-            if(press == DOWN):
-                mpc_vol_down(client, 2)
-
-            '''
-            except CommandError as e:
-                print('CommandError: {}'.format(e))
-                continue
-            '''
+            # Call the function handling the type of button press
+            if press in button_table:
+                button_table[press](client)
 
         except Exception as e:
             print('Exception: {}'.format(e))
@@ -613,7 +598,7 @@ def LcdOn(**kwargs):
 # Set the LCD color, kwargs has a key called 'text'
 # that is displayed on the lcd menu and used to set the color
 # on the physical lcd
-def LcdColorSet(**kwargs):
+def SetLcdColor(**kwargs):
     global cur_color
     text_to_color = {'Red': LCD.RED, 'Green': LCD.GREEN, 'Blue': LCD.BLUE,
         'Yellow': LCD.YELLOW, 'Teal': LCD.TEAL, 'Violet': LCD.VIOLET, }
@@ -633,112 +618,6 @@ def ShowDateTime(**kwargs):
                                      time.localtime())))
 
 
-'''
-# NOTE: NOT-USED YET
-def SetDateTime(**kwargs):
-    if DEBUG:
-        print('in SetDateTime')
-
-
-# NOTE: NOT-USED YET
-def ShowIPAddress(**kwargs):
-    if DEBUG:
-        print('in ShowIPAddress')
-    LCD.clear()
-    LCD.message(run_cmd("/sbin/ifconfig").
-                split("\n")[1].split()[1][5:])
-    while 1:
-        if LCD.buttonPressed(LCD.LEFT):
-            break
-        time.sleep(0.25)
-'''
-
-
-# only use the following if you find useful
-def UseDHCP():
-    "Allows you to switch to a network config that uses DHCP"
-    LCD.clear()
-    LCD.message('Are you sure?\nPress Sel for Y')
-    while 1:
-        if LCD.buttonPressed(LCD.LEFT):
-            break
-        if LCD.buttonPressed(LCD.SELECT):
-            # uncomment the following once you get an original copy in place
-            # commands.getoutput("sudo"
-            # "cp /etc/network/interfaces.orig /etc/network/interfaces")
-            LCD.clear()
-            LCD.message('Please reboot')
-            time.sleep(1.5)
-            break
-        time.sleep(0.25)
-
-
-def waitForButton():
-        # Poll all buttons once,
-        # avoids repeated I2C traffic for different cases
-        while 1:
-            b = LCD.buttons()
-            btnUp = b & (1 << LCD.UP)
-            btnDown = b & (1 << LCD.DOWN)
-            btnLeft = b & (1 << LCD.LEFT)
-            btnRight = b & (1 << LCD.RIGHT)
-            btnSel = b & (1 << LCD.SELECT)
-
-            if (btnUp or btnDown or btnLeft or btnRight or btnSel):
-                    break
-            time.sleep(0.1)
-
-
-'''
-class CommandToRun:
-    def __init__(self, myName, theCommand):
-        self.text = myName
-        self.commandToRun = theCommand
-
-    def Run(self):
-        self.clist = split(run_cmd(self.commandToRun), '\n')
-        clistlen = len(self.clist)
-        if clistlen > 0:
-            LCD.clear()
-            if clistlen > 1:
-                LCD.message(self.clist[0]+'\n'+self.clist[1])
-            else:
-                LCD.message(self.clist[0])
-
-            j = 0
-            btnPressed = 1
-            while 1:
-
-                if btnPressed:
-                        LCD.clear()
-                        if j < (clistlen-1):
-                                LCD.message(self.clist[j]+'\n'+self.clist[j+1])
-                        else:
-                                LCD.message(self.clist[j]+'\n')
-                        time.sleep(0.25)
-
-                btnPressed = 0
-                b = LCD.buttons()
-                btnUp = b & (1 << LCD.UP)
-                btnDown = b & (1 << LCD.DOWN)
-                btnLeft = b & (1 << LCD.LEFT)
-                btnRight = b & (1 << LCD.RIGHT)
-                btnSel = b & (1 << LCD.SELECT)
-
-                if btnDown:
-                        btnPressed = 1
-                        if j < (clistlen-1):
-                                j = j+1
-                elif btnUp:
-                        btnPressed = 1
-                        if j:
-                                j = j-1
-                elif btnLeft:
-                        btnPressed = 1
-                        break
-'''
-
-
 class Widget:
     def __init__(self, myName, myFunction, kwargs):
         self.text = myName
@@ -752,31 +631,6 @@ class Folder:
         self.items = []
         self.parent = myParent
 
-
-'''
-def HandleSettings(node):
-    global LCD
-    if DEBUG:
-        print('In HandleSettings')
-    if node.getAttribute('lcdColor').lower() == 'red':
-        LCD.backlight(LCD.RED)
-    elif node.getAttribute('lcdColor').lower() == 'green':
-        LCD.backlight(LCD.GREEN)
-    elif node.getAttribute('lcdColor').lower() == 'blue':
-        LCD.backlight(LCD.BLUE)
-    elif node.getAttribute('lcdColor').lower() == 'yellow':
-        LCD.backlight(LCD.YELLOW)
-    elif node.getAttribute('lcdColor').lower() == 'teal':
-        LCD.backlight(LCD.TEAL)
-    elif node.getAttribute('lcdColor').lower() == 'violet':
-        LCD.backlight(LCD.VIOLET)
-    elif node.getAttribute('lcdColor').lower() == 'white':
-        LCD.backlight(LCD.ON)
-    if node.getAttribute('lcdBacklight').lower() == 'on':
-        LCD.backlight(LCD.ON)
-    elif node.getAttribute('lcdBacklight').lower() == 'off':
-        LCD.backlight(LCD.OFF)
-'''
 
 def loaded_playlist():
     ''' return the name of the playlist currently being played '''
