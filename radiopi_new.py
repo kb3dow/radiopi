@@ -54,7 +54,6 @@ LCD_MENU_MODE = 1
 
 # Globals
 INI_FILE = 'radiopi.ini'
-#playlist_track_names = []
 mpd_playlists = []
 cur_playlist = ''
 cur_track = 1
@@ -177,7 +176,7 @@ def mpd_poller(lcd_q):
     client.timeout = 10        # network timeout (S) default: None
     # timeout for fetching the result of the idle command is handled
     # seperately, default: None
-    client.idletimeout = 60 # keep refreshing every minute even if no change
+    client.idletimeout = 60  # keep refreshing every minute even if no change
     while True:
         client.connect("localhost", 6600)  # connect to localhost:6600
         if DEBUG:
@@ -323,7 +322,7 @@ def mpc_next(client):
     if(cur_track > total_tracks):
         cur_track = 1
     if DEBUG:
-        print('Track %d'%(cur_track))
+        print('Track %d' % (cur_track))
     client.next()
     return True
 
@@ -335,7 +334,7 @@ def mpc_prev(client):
         cur_track = total_tracks
     client.previous()
     if DEBUG:
-        print('Track %d'%(cur_track))
+        print('Track  % d' % (cur_track))
     return True
 
 
@@ -345,7 +344,7 @@ def mpc_vol_up(client, amt=5):
         cur_vol += amt
         client.setvol(cur_vol)
         if DEBUG:
-            print('Setting Volume %d'%(cur_vol))
+            print('Setting Volume  % d' % (cur_vol))
         return True
     return False
 
@@ -356,7 +355,7 @@ def mpc_vol_down(client, amt=5):
         cur_vol -= amt
         client.setvol(cur_vol)
         if DEBUG:
-            print('Setting Volume %d'%(cur_vol))
+            print('Setting Volume  % d' % (cur_vol))
         return True
     return False
 
@@ -379,8 +378,8 @@ def playerMode(**kwargs):
     if DEBUG:
         print('inside playerMode - flushing')
 
-    button_table = { SELECT: mpc_toggle_pause, LEFT: mpc_prev, RIGHT: mpc_next,
-        UP: mpc_vol_up, DOWN: mpc_vol_down}
+    button_table = {SELECT: mpc_toggle_pause, LEFT: mpc_prev, RIGHT: mpc_next,
+                    UP: mpc_vol_up, DOWN: mpc_vol_down}
     display_mode_state_old = display_mode_state
     display_mode_state = LCD_PLAYER_MODE
 
@@ -413,7 +412,7 @@ def playerMode(**kwargs):
             continue
 
         press &= 0x7F  # mask out the long press bit
-        try: 
+        try:
             # Call the function handling the type of button press
             if press in button_table:
                 button_table[press](client)
@@ -424,6 +423,7 @@ def playerMode(**kwargs):
 
     display_mode_state = display_mode_state_old
     return
+
 
 def flush_buttons():
     while(LCD.buttons() != 0):
@@ -601,14 +601,16 @@ def LcdOn(**kwargs):
 # on the physical lcd
 def SetLcdColor(**kwargs):
     global cur_color
-    text_to_color = {'Red': LCD.RED, 'Green': LCD.GREEN, 'Blue': LCD.BLUE,
-        'Yellow': LCD.YELLOW, 'Teal': LCD.TEAL, 'Violet': LCD.VIOLET, }
+    text_to_color = {'Red': LCD.RED, 'Green': LCD.GREEN,
+                     'Blue': LCD.BLUE, 'Yellow': LCD.YELLOW,
+                     'Teal': LCD.TEAL, 'Violet': LCD.VIOLET, }
 
     if 'text' in kwargs and kwargs['text'] in text_to_color:
         if DEBUG:
             print('setting LCD to {}'.format(kwargs['text']))
         cur_color = text_to_color[kwargs['text']]
         LCD.backlight(cur_color)
+
 
 def ShowDateTime(**kwargs):
     LCD.clear()
@@ -651,7 +653,7 @@ def loaded_playlist():
         current_playlist.append(song)
 
     for plist in stored_playlists:
-        tmp_playlist= []
+        tmp_playlist = []
         for s in client.listplaylist(plist):
             tmp_playlist.append(s)
 
@@ -685,6 +687,7 @@ def mpc_load_playlist(**kwargs):
     playerMode(**{})
     return
 
+
 # From the playlist names retreived earlier, form the menu for the LCE
 def form_playlist_menu(folder):
     global DEBUG
@@ -694,9 +697,10 @@ def form_playlist_menu(folder):
         if DEBUG:
             print('adding label %s to folder %s' % (label, folder.text))
         w = Widget(label,
-            'mpc_load_playlist',
-            {'text': label})
+                   'mpc_load_playlist',
+                   {'text': label})
         folder.items.append(w)
+
 
 def ProcessNode(currentNode, currentFolder):
     '''
@@ -711,7 +715,7 @@ def ProcessNode(currentNode, currentFolder):
 
     if DEBUG:
         print('IN ProcessNode(%s, %s)' % (current_node_text,
-            currentFolder.text))
+                                          currentFolder.text))
 
     if currentFolder.text in dynamic_folder_handlers:
         if DEBUG:
@@ -846,13 +850,9 @@ class Display:
         elif isinstance(self.curFolder.items[self.curSelectedItem], Widget):
             if DEBUG:
                 print('going to call %s()' %
-                    (self.curFolder.items[self.curSelectedItem].function))
-            eval(self.curFolder.items[self.curSelectedItem].function+\
-                '(**self.curFolder.items[self.curSelectedItem].kwargs)')
-        '''
-        elif isinstance(self.curFolder.items[self.curSelectedItem], CommandToRun):
-            self.curFolder.items[self.curSelectedItem].Run()
-        '''
+                      (self.curFolder.items[self.curSelectedItem].function))
+            eval(self.curFolder.items[self.curSelectedItem].function +
+                 '(**self.curFolder.items[self.curSelectedItem].kwargs)')
 
     def select(self):
         if isinstance(self.curFolder.items[self.curSelectedItem], Folder):
@@ -862,9 +862,9 @@ class Display:
         elif isinstance(self.curFolder.items[self.curSelectedItem], Widget):
             if DEBUG:
                 print('going to call %s()' %
-                    (self.curFolder.items[self.curSelectedItem].function))
-            eval(self.curFolder.items[self.curSelectedItem].function+\
-                '(**self.curFolder.items[self.curSelectedItem].kwargs)')
+                      (self.curFolder.items[self.curSelectedItem].function))
+            eval(self.curFolder.items[self.curSelectedItem].function
+                 + '(**self.curFolder.items[self.curSelectedItem].kwargs)')
 
 
 # ----------------------------
@@ -911,7 +911,6 @@ def main():
             display.update(pressed)
             display.display()
         time.sleep(0.15)
-
 
     lcd_thread.join()
     mpd_thread.join()
