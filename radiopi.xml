@@ -1,8 +1,8 @@
 <application>
 <!--
   <settings lcdColor="White" lcdBackground="On" />
+  <widget text="Player" function="playerMode" />
 -->
-  <widget text="Radio" function="radioPlay" />
 
   <folder text="Playlists">
   </folder >

@@ -49,8 +49,8 @@ LCD = Adafruit_CharLCDPlate(busnum=1)
 LCD_QUEUE = queue.Queue()
 cfgParser = configparser.ConfigParser()
 
-STATE_PLAYER_MODE = 0
-STATE_MENU_MODE = 1
+LCD_PLAYER_MODE = 0
+LCD_MENU_MODE = 1
 
 # Globals
 INI_FILE = 'radiopi.ini'
@@ -73,7 +73,7 @@ bar_width = 7.0          # Vol Bar width on display
 rng_vol = max_vol - min_vol + 1
 vol_solbar = rng_vol / bar_width
 vol_line = vol_solbar / 5.0  # There are 5 vert lines per char display
-display_mode_state = 0
+display_mode_state = LCD_PLAYER_MODE
 mpdc = {}
 
 menufile = 'radiopi.xml'
@@ -177,7 +177,7 @@ def mpd_poller(lcd_q):
     client.timeout = 10        # network timeout (S) default: None
     # timeout for fetching the result of the idle command is handled
     # seperately, default: None
-    client.idletimeout = 60
+    client.idletimeout = 60 # keep refreshing every minute even if no change
     while True:
         client.connect("localhost", 6600)  # connect to localhost:6600
         if DEBUG:
@@ -185,9 +185,13 @@ def mpd_poller(lcd_q):
         while True:
             try:
                 changes = client.idle()
-                # if 'player' in change or 'mixer' in change:
-                    # get_mpd_info(lcd_q, client)
-                get_mpd_info(lcd_q, client)
+                # Update the display only if LCD in player mode
+                # otherwise though music is being played, a menu might
+                # be displayed that we do not want to overwrite
+                if display_mode_state == LCD_PLAYER_MODE:
+                    # if 'player' in change or 'mixer' in change:
+                        # get_mpd_info(lcd_q, client)
+                    get_mpd_info(lcd_q, client)
 
             except Exception as e:
                 print('Exception: {}'.format(e))
@@ -365,11 +369,14 @@ def mpc_pause(client, pause):
 
 
 # Inside a playlist manage the buttons to play nex prev track
-def radioPlay(**kwargs):
-    global mpdc
+def playerMode(**kwargs):
+    global mpdc, display_mode_state
 
     if DEBUG:
-        print('inside radioPlay - flushing')
+        print('inside playerMode - flushing')
+    display_mode_state_old = display_mode_state
+    display_mode_state = LCD_PLAYER_MODE
+
     flush_buttons()
 
     # pause should come from a global
@@ -381,7 +388,7 @@ def radioPlay(**kwargs):
 
         # SELECT button long pressed
         if(press == (LONG_PRESS | SELECT)):
-            return  # Return back to main menu
+            break  # Return back to main menu
 
         # extre steps to handle the situation where the client
         # connection seems to timeout while waiting
@@ -429,6 +436,8 @@ def radioPlay(**kwargs):
             print('Exception: {}'.format(e))
             continue
 
+    display_mode_state = display_mode_state_old
+    return
 
 def flush_buttons():
     while(LCD.buttons() != 0):
@@ -800,7 +809,11 @@ def loaded_playlist():
 
 
 def mpc_load_playlist(**kwargs):
-    ''' load a named playlist, if already in that playlist, do nothing '''
+    '''
+    load a named playlist, if already in that playlist, do nothing
+    The name of the playlist comes from the menu selection that is there in
+    kwargs['text']
+    '''
     global DEBUG, mpdc
 
     if DEBUG:
@@ -814,7 +827,7 @@ def mpc_load_playlist(**kwargs):
         client.load(playlist_name)
         client.play('0')
 
-    radioPlay(**{})
+    playerMode(**{})
     return
 
 # From the playlist names retreived earlier, form the menu for the LCE
@@ -1026,7 +1039,7 @@ def main():
     get_mpd_playlists(mpdc)
     ProcessNode(top, uiItems)
 
-    radioPlay(**{})
+    playerMode(**{})
 
     display = Display(uiItems)
     display.display()
