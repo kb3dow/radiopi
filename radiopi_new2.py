@@ -55,6 +55,7 @@ STATE_MENU_MODE = 1
 # Globals
 INI_FILE = 'radiopi.ini'
 #playlist_track_names = []
+mpd_playlists = []
 cur_playlist = ''
 cur_track = 1
 total_tracks = 0
@@ -76,7 +77,7 @@ display_mode_state = 0
 mpdc = {}
 
 menufile = 'radiopi.xml'
-# set DEBUG=1 for print debug statements
+# set DEBUG=True/falst to enable/disable print debug statements
 DEBUG = True
 DISPLAY_ROWS = 2
 DISPLAY_COLS = 16
@@ -179,7 +180,7 @@ def mpd_poller(lcd_q):
     client.idletimeout = 60
     while True:
         client.connect("localhost", 6600)  # connect to localhost:6600
-        if DEBUG
+        if DEBUG:
             print(client.status())
         while True:
             try:
@@ -486,18 +487,16 @@ def saveSettingsWrapper(**kwargs):
     time.sleep(2)
 
 
-def loadPlaylists(mpdc):
-    if DEBUG:
-        print('available playlists')
-        for t in mpdc['client'].listplaylists():
-            print(t)
+# Get the names of all playlists known to mpd
+def get_mpd_playlists(mpdc):
+    global mpd_playlists
 
-        print('current playlist')
-        print(mpdc['client'].playlist())
-        print('playlistinfo:-')
-
-        for t in mpdc['client'].playlistinfo():
+    for t in mpdc['client'].listplaylists():
+        if DEBUG:
+            print('available playlists')
             print(t)
+        mpd_playlists.append(t)
+
     return
 
 
@@ -770,41 +769,117 @@ def HandleSettings(node):
         LCD.backlight(LCD.OFF)
 '''
 
+def loaded_playlist():
+    ''' return the name of the playlist currently being played '''
+    global mpdc, DEBUG
 
-def ProcessNode(currentNode, currentItem):
+    client = mpdc['client']
+    in_playlist = ''
+
+    stored_playlists = []
+    for i in client.listplaylists():
+        name = i['playlist']
+        stored_playlists.append(name)
+
+    current_playlist = []
+    for s in client.playlistinfo():
+        song = s['file']
+        current_playlist.append(song)
+
+    for plist in stored_playlists:
+        tmp_playlist= []
+        for s in client.listplaylist(plist):
+            tmp_playlist.append(s)
+
+        if tmp_playlist == current_playlist:
+            if DEBUG:
+                print("Currently in playlist: {}".format(plist))
+            in_playlist = plist
+            break
+    return in_playlist
+
+
+def mpc_load_playlist(**kwargs):
+    ''' load a named playlist, if already in that playlist, do nothing '''
+    global DEBUG, mpdc
+
+    if DEBUG:
+        print('In mpc_load_playlist() label: %s' % (kwargs['text']))
+
+    client = mpdc['client']
+    playlist_name = kwargs['text']
+
+    if playlist_name != loaded_playlist():
+        client.clear()
+        client.load(playlist_name)
+        client.play('0')
+
+    radioPlay(**{})
+    return
+
+# From the playlist names retreived earlier, form the menu for the LCE
+def form_playlist_menu(folder):
+    global DEBUG
+    global mpd_playlists
+    for plist in mpd_playlists:
+        label = plist['playlist']
+        if DEBUG:
+            print('adding label %s to folder %s' % (label, folder.text))
+        w = Widget(label,
+            'mpc_load_playlist',
+            {'text': label})
+        folder.items.append(w)
+
+def ProcessNode(currentNode, currentFolder):
     '''
     currentNode is a dom.documentElement - a folder node from xml
-    currentItem is of type Folder into which items from currentNode are to be
+    currentFolder is of type Folder into which items from currentNode are to be
         added
     '''
-    global cur_color
+    global DEBUG
+
+    dynamic_folder_handlers = {'Playlists': form_playlist_menu}
+    current_node_text = currentNode.getAttribute('text')
+
+    if DEBUG:
+        print('IN ProcessNode(%s, %s)' % (current_node_text,
+            currentFolder.text))
+
+    if currentFolder.text in dynamic_folder_handlers:
+        if DEBUG:
+            print('adding dynamic labels to folder %s' % (current_node_text))
+        dynamic_folder_handlers[current_node_text](currentFolder)
+        return
+
     children = currentNode.childNodes
 
     for child in children:
         if isinstance(child, xml.dom.minidom.Element):
-            d = {}
+            # form a dict of all the attributes so that they can be used
+            # by the widget later when/if needed
+            attributes_d = {}
             for a in child.attributes.values():
-                d[a.name] = a.value
+                attributes_d[a.name] = a.value
+
+            child_text_attrib = child.getAttribute('text')
 
             if child.tagName == 'folder':
-                thisFolder = Folder(child.getAttribute('text'), currentItem)
-                currentItem.items.append(thisFolder)
+                thisFolder = Folder(child_text_attrib, currentFolder)
+                currentFolder.items.append(thisFolder)
                 ProcessNode(child, thisFolder)
             elif child.tagName == 'widget':
-                thisWidget = Widget(child.getAttribute('text'),
+                thisWidget = Widget(child_text_attrib,
                                     child.getAttribute('function'),
-                                    d)
-                currentItem.items.append(thisWidget)
+                                    attributes_d)
+                currentFolder.items.append(thisWidget)
             '''
             elif child.tagName == 'run':
-                thisCommand = CommandToRun(child.getAttribute('text'),
+                thisCommand = CommandToRun(child_text_attrib,
                                            child.firstChild.data)
-                currentItem.items.append(thisCommand)
+                currentFolder.items.append(thisCommand)
             elif child.tagName == 'settings':
                 HandleSettings(child)
             '''
-
-    LCD.backlight(cur_color)
 
 
 class Display:
@@ -902,8 +977,8 @@ class Display:
             self.curSelectedItem = 0
         elif isinstance(self.curFolder.items[self.curSelectedItem], Widget):
             if DEBUG:
-                print('eval',
-                      self.curFolder.items[self.curSelectedItem].function)
+                print('going to call %s()' %
+                    (self.curFolder.items[self.curSelectedItem].function))
             eval(self.curFolder.items[self.curSelectedItem].function+\
                 '(**self.curFolder.items[self.curSelectedItem].kwargs)')
         '''
@@ -912,16 +987,14 @@ class Display:
         '''
 
     def select(self):
-        if DEBUG:
-            print('check widget')
         if isinstance(self.curFolder.items[self.curSelectedItem], Folder):
             self.curFolder = self.curFolder.items[self.curSelectedItem]
             self.curTopItem = 0
             self.curSelectedItem = 0
         elif isinstance(self.curFolder.items[self.curSelectedItem], Widget):
             if DEBUG:
-                print('eval',
-                      self.curFolder.items[self.curSelectedItem].function)
+                print('going to call %s()' %
+                    (self.curFolder.items[self.curSelectedItem].function))
             eval(self.curFolder.items[self.curSelectedItem].function+\
                 '(**self.curFolder.items[self.curSelectedItem].kwargs)')
 
@@ -943,8 +1016,6 @@ def main():
     lcdInit()
     radioInit()
 
-    radioPlay(**{})
-
     uiItems = Folder('root', '')
 
     # parse an XML file by name
@@ -952,8 +1023,10 @@ def main():
 
     top = dom.documentElement
 
+    get_mpd_playlists(mpdc)
     ProcessNode(top, uiItems)
-    loadPlaylists(mpdc)
+
+    radioPlay(**{})
 
     display = Display(uiItems)
     display.display()
