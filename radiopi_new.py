@@ -760,7 +760,7 @@ def ProcessNode(currentNode, currentFolder):
     global DEBUG
 
     dynamic_folder_handlers = {'Playlists': form_playlists_menu,
-        'Artists': form_artists_menu}
+                               'Artists': form_artists_menu}
     current_node_text = currentNode.getAttribute('text')
 
     if DEBUG:
