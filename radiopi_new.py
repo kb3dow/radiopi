@@ -29,7 +29,6 @@ import time
 import queue
 import threading
 import configparser
-# from string                import split
 from xml.dom.minidom import *
 import utils.cmd
 
@@ -54,7 +53,6 @@ LCD_MENU_MODE = 1
 
 # Globals
 INI_FILE = 'radiopi.ini'
-mpd_playlists = []
 cur_playlist = ''
 cur_track = 1
 total_tracks = 0
@@ -483,16 +481,32 @@ def saveSettingsWrapper(**kwargs):
 
 
 # Get the names of all playlists known to mpd
-def get_mpd_playlists(mpdc):
-    global mpd_playlists
+def get_mpd_playlists():
+    global mpdc
+    mpd_playlists = []
 
-    for t in mpdc['client'].listplaylists():
+    client = mpdc['client']
+    for t in client.listplaylists():
         if DEBUG:
             print('available playlists')
             print(t)
-        mpd_playlists.append(t)
+        mpd_playlists.append(t['playlist'])
 
-    return
+    return mpd_playlists
+
+
+# Get the names of all artists known to mpd
+def get_mpd_artists():
+    global mpdc
+    stored_artists = []
+
+    client = mpdc['client']
+    for pl in client.listplaylists():
+        for s in client.listplaylistinfo(pl['playlist']):
+            if 'artist' in s and s['artist'] not in stored_artists:
+                stored_artists.append(s['artist'])
+
+    return stored_artists
 
 
 # ----------------------------
@@ -688,17 +702,52 @@ def mpc_load_playlist(**kwargs):
     return
 
 
-# From the playlist names retreived earlier, form the menu for the LCE
-def form_playlist_menu(folder):
-    global DEBUG
-    global mpd_playlists
-    for plist in mpd_playlists:
-        label = plist['playlist']
+def mpc_load_artist(**kwargs):
+    '''
+    clear the current playlist
+    load a named artist
+    The name of the artist comes from the menu selection that is there in
+    kwargs['text']
+    # TODO If the artist is already in effect, do NOT clear the playlist and
+    start from 0
+    '''
+    global DEBUG, mpdc
+
+    if DEBUG:
+        print('In mpc_load_artist() label: %s' % (kwargs['text']))
+
+    client = mpdc['client']
+    artist = kwargs['text']
+
+    client.clear()
+    client.findadd('artist', artist)
+    client.play('0')
+
+    playerMode(**{})
+    return
+
+
+# Form the Playlist menu for the LCD
+def form_playlists_menu(folder):
+    global DEBUG, mpdc
+    for item in get_mpd_playlists():
         if DEBUG:
-            print('adding label %s to folder %s' % (label, folder.text))
-        w = Widget(label,
+            print('adding item %s to folder %s' % (item, folder.text))
+        w = Widget(item,
                    'mpc_load_playlist',
-                   {'text': label})
+                   {'text': item})
+        folder.items.append(w)
+
+
+# Form the Artist menu for the LCD
+def form_artists_menu(folder):
+    global DEBUG, mpdc
+    for item in get_mpd_artists():
+        if DEBUG:
+            print('adding item %s to folder %s' % (item, folder.text))
+        w = Widget(item,
+                   'mpc_load_artist',
+                   {'text': item})
         folder.items.append(w)
 
 
@@ -710,7 +759,8 @@ def ProcessNode(currentNode, currentFolder):
     '''
     global DEBUG
 
-    dynamic_folder_handlers = {'Playlists': form_playlist_menu}
+    dynamic_folder_handlers = {'Playlists': form_playlists_menu,
+        'Artists': form_artists_menu}
     current_node_text = currentNode.getAttribute('text')
 
     if DEBUG:
@@ -891,7 +941,6 @@ def main():
 
     top = dom.documentElement
 
-    get_mpd_playlists(mpdc)
     ProcessNode(top, uiItems)
 
     playerMode(**{})

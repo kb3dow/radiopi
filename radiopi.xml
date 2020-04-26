@@ -4,8 +4,8 @@
   <widget text="Player" function="playerMode" />
 -->
 
-  <folder text="Playlists">
-  </folder >
+  <folder text="Playlists"> </folder >
+  <folder text="Artists"> </folder >
 
   <folder text="System Info">
     <widget text="IP Address" function="display_ipaddr" />
