@@ -1,10 +1,9 @@
 #!/usr/bin/env python
-
+'''
 # radio.py, version 2.1 (RGB LCD Pi Plate version)
 # February 17, 2013
 # Written by Sheldon Hartling for Usual Panic
 # BSD license, all text above must be included in any redistribution
-#
 
 #
 # based on code from Kyle Prier (http://wwww.youtube.com/meistervision)
@@ -18,11 +17,9 @@
 #     http://www.instructables.com/id/Raspberry-Pi-Internet-Radio-With-Flask/?ALLSTEPS
 # 2020 Mar: All flash changes abandoned for now
 # 2020 Mar: Rework to allow playlists. Assume playlists are formed externally
+'''
 
 # dependancies
-from Adafruit.Adafruit_I2C import Adafruit_I2C
-from Adafruit.Adafruit_MCP230xx import Adafruit_MCP230XX
-from Adafruit.Adafruit_CharLCDPlate import Adafruit_CharLCDPlate
 import datetime
 import subprocess
 import time
@@ -30,7 +27,6 @@ import queue
 import threading
 import configparser
 from xml.dom.minidom import *
-import utils.cmd
 
 import socket
 import subprocess
@@ -38,6 +34,11 @@ import smbus
 import time
 
 from mpd import (MPDClient, MPDError, ConnectionError)
+
+from Adafruit.Adafruit_I2C import Adafruit_I2C
+from Adafruit.Adafruit_MCP230xx import Adafruit_MCP230XX
+from Adafruit.Adafruit_CharLCDPlate import Adafruit_CharLCDPlate
+import utils.cmd
 
 # initialize the LCD plate
 #   use busnum = 0 for raspi version 1 (256MB)
@@ -129,8 +130,10 @@ charSevenBitmaps = [[0b10000,  # Play (also selected station)
 # WORKER THREADS
 # ----------------------------
 
-# Show what is playing on the lcd screen
 def get_mpd_info(lcd_q, client):
+    '''
+    Show what is playing on the lcd screen
+    '''
     global DEBUG
 
     try:
@@ -167,8 +170,10 @@ def get_mpd_info(lcd_q, client):
         raise e
 
 
-# Keep track of what is playing by polling and displaying
 def mpd_poller(lcd_q):
+    '''
+    Keep track of what is playing by polling and displaying
+    '''
     global DEBUG
     client = MPDClient()       # create client object
     client.timeout = 10        # network timeout (S) default: None
@@ -181,7 +186,7 @@ def mpd_poller(lcd_q):
             print(client.status())
         while True:
             try:
-                changes = client.idle()
+                client.idle()
                 # Update the display only if LCD in player mode
                 # otherwise though music is being played, a menu might
                 # be displayed that we do not want to overwrite
@@ -204,20 +209,19 @@ def lcd_worker(q):
     Define a function to run in the worker thread
     '''
     while True:
-        msgType, msg = q.get()
+        msg_type, msg = q.get()
         # if we're falling behind, skip some LCD updates
         while not q.empty():
             q.task_done()
-            msgType, msg = q.get()
+            msg_type, msg = q.get()
 
-        if msgType == MSG_LCD:
+        if msg_type == MSG_LCD:
             LCD.setCursor(0, 0)
             LCD.message(msg)
-        elif msgType == MSG_SAVE:
+        elif msg_type == MSG_SAVE:
             saveSettings()
 
         q.task_done()
-    return
 
 
 def settingsLoad(mpdc, cfgp, cfgfile):
@@ -247,8 +251,10 @@ def mpdc_init(mpdc):
     mpdc['client'] = client
 
 
-def lcdInit():
-    # Setup AdaFruit LCD Plate
+def lcd_init():
+    '''
+    Setup AdaFruit LCD Plate
+    '''
     global cur_color
     LCD.begin(DISPLAY_COLS, DISPLAY_ROWS)
     LCD.clear()
@@ -258,19 +264,19 @@ def lcdInit():
     for i in range(6):
         bitmap = []
         bits = (255 << (5 - i)) & 0x1f
-        for j in range(8):
+        for _ in range(8):
             bitmap.append(bits)
         LCD.createChar(i, bitmap)
 
     # Create up/down icon (char 6)
     LCD.createChar(6, [0b00100,
-                   0b01110,
-                   0b11111,
-                   0b00000,
-                   0b00000,
-                   0b11111,
-                   0b01110,
-                   0b00100])
+                       0b01110,
+                       0b11111,
+                       0b00000,
+                       0b00000,
+                       0b11111,
+                       0b01110,
+                       0b00100])
 
     # By default, char 7 is loaded in 'pause' state
     LCD.createChar(7, charSevenBitmaps[1])
@@ -284,16 +290,6 @@ def radioInit():
 
     # Stop music player
     # output = run_cmd("mpc stop") # NOTE: no need to stop what was playing
-
-    # Create the lcd update worker thread and make it a daemon
-    lcd_thread = threading.Thread(target=lcd_worker, args=(LCD_QUEUE,))
-    lcd_thread.setDaemon(True)
-    lcd_thread.start()
-
-    # Create the 2nd worker thread polling mpd and make it a daemon
-    mpd_thread = threading.Thread(target=mpd_poller, args=(LCD_QUEUE,))
-    mpd_thread.setDaemon(True)
-    mpd_thread.start()
 
     # Display startup banner
     LCD_QUEUE.put((MSG_LCD, 'Welcome to\nRadio Pi'), True)
@@ -760,7 +756,7 @@ def ProcessNode(currentNode, currentFolder):
     global DEBUG
 
     dynamic_folder_handlers = {'Playlists': form_playlists_menu,
-        'Artists': form_artists_menu}
+                               'Artists': form_artists_menu}
     current_node_text = currentNode.getAttribute('text')
 
     if DEBUG:
@@ -920,18 +916,30 @@ class Display:
 # ----------------------------
 # MAIN LOOP
 # ----------------------------
-# start things up
 def main():
-    global cur_track, total_tracks, \
-        cfgParser, INI_FILE,\
-        mpdc
+    '''
+    Main function to init stuff and start player
+    '''
+
+    global cfgParser, INI_FILE, mpdc
 
     if DEBUG:
         print('entering main()')
 
     settingsLoad(mpdc, cfgParser, INI_FILE)
     mpdc_init(mpdc)
-    lcdInit()
+    lcd_init()
+
+    # Create the lcd update worker thread and make it a daemon
+    lcd_thread = threading.Thread(target=lcd_worker, args=(LCD_QUEUE,))
+    lcd_thread.setDaemon(True)
+    lcd_thread.start()
+
+    # Create the 2nd worker thread polling mpd and make it a daemon
+    mpd_thread = threading.Thread(target=mpd_poller, args=(LCD_QUEUE,))
+    mpd_thread.setDaemon(True)
+    mpd_thread.start()
+
     radioInit()
 
     uiItems = Folder('root', '')
