@@ -26,12 +26,14 @@ import time
 import queue
 import threading
 import configparser
-from xml.dom.minidom import *
+import xml.dom.minidom as minidom
+# from xml.dom.minidom import *
 
 import socket
 import subprocess
-import smbus
 import time
+import sys
+import smbus
 
 from mpd import (MPDClient, MPDError, ConnectionError)
 
@@ -74,7 +76,7 @@ vol_line = vol_solbar / 5.0  # There are 5 vert lines per char display
 display_mode_state = LCD_PLAYER_MODE
 mpdc = {}
 
-menufile = 'radiopi.xml'
+MENUFILE = 'radiopi.xml'
 # set DEBUG=True/falst to enable/disable print debug statements
 DEBUG = True
 DISPLAY_ROWS = 2
@@ -134,8 +136,6 @@ def get_mpd_info(lcd_q, client):
     '''
     Show what is playing on the lcd screen
     '''
-    global DEBUG
-
     try:
         cso = client.currentsong()
         cst = client.status()
@@ -174,7 +174,6 @@ def mpd_poller(lcd_q):
     '''
     Keep track of what is playing by polling and displaying
     '''
-    global DEBUG
     client = MPDClient()       # create client object
     client.timeout = 10        # network timeout (S) default: None
     # timeout for fetching the result of the idle command is handled
@@ -241,7 +240,7 @@ def settingsLoad(mpdc, cfgp, cfgfile):
         mpdc['port'] = cfgParser.getint('mpdclient_section', 'port')
     except Exception as e:
         print('Exception: {}'.format(e))
-        quit()
+        sys.exit()
 
 
 def mpdc_init(mpdc):
@@ -284,7 +283,26 @@ def lcd_init():
     LCD.createChar(8, charSevenBitmaps[0])
 
 
-def radioInit():
+def threads_init():
+    ''' Create the worker threads '''
+    thrds = []
+
+    # Create the lcd update worker thread and make it a daemon
+    lcd_thread = threading.Thread(target=lcd_worker, args=(LCD_QUEUE,))
+    lcd_thread.setDaemon(True)
+    lcd_thread.start()
+    thrds.append(lcd_thread)
+
+    # Create the 2nd worker thread polling mpd and make it a daemon
+    mpd_thread = threading.Thread(target=mpd_poller, args=(LCD_QUEUE,))
+    mpd_thread.setDaemon(True)
+    mpd_thread.start()
+    thrds.append(mpd_thread)
+
+    return thrds
+
+
+def player_init():
     global cur_track, cur_vol,\
         total_tracks, cfgParser, INI_FILE
 
@@ -311,6 +329,9 @@ def radioInit():
 
 
 def mpc_next(client):
+    '''
+    Play the next track in current playlist
+    '''
     global cur_track, total_tracks
     cur_track += 1
     if(cur_track > total_tracks):
@@ -322,6 +343,9 @@ def mpc_next(client):
 
 
 def mpc_prev(client):
+    '''
+    Play the prev track in current playlist
+    '''
     global cur_track, total_tracks
     cur_track -= 1
     if(cur_track < 1):
@@ -333,6 +357,9 @@ def mpc_prev(client):
 
 
 def mpc_vol_up(client, amt=5):
+    '''
+    Volume up
+    '''
     global cur_vol
     if(cur_vol <= (100-amt)):
         cur_vol += amt
@@ -344,6 +371,9 @@ def mpc_vol_up(client, amt=5):
 
 
 def mpc_vol_down(client, amt=5):
+    '''
+    Volume down
+    '''
     global cur_vol
     if(cur_vol >= amt):
         cur_vol -= amt
@@ -420,11 +450,13 @@ def playerMode(**kwargs):
 
 
 def flush_buttons():
-    while(LCD.buttons() != 0):
+    ''' clear button reads '''
+    while LCD.buttons() != 0:
         delay_milliseconds(1)
 
 
 def read_buttons():
+    ''' read which button is pressed '''
     buttons = LCD.buttons()
 
     if not buttons:
@@ -433,8 +465,8 @@ def read_buttons():
     # Debounce push buttons
     time_1 = time.time()
     time_2 = time_1
-    if(buttons != 0):
-        while(LCD.buttons() != 0):
+    if buttons != 0:
+        while LCD.buttons() != 0:
             time_2 = time.time()
             delay_milliseconds(1)
 
@@ -448,14 +480,11 @@ def read_buttons():
 
 
 def delay_milliseconds(milliseconds):
+    ''' delay in mSec '''
     # divide milliseconds by 1000 for seconds
     seconds = milliseconds / float(1000)
     time.sleep(seconds)
 
-
-# ----------------------------
-# LOAD PLAYLIST OF STATIONS
-# ----------------------------
 
 def saveSettings():
     global cur_track, cur_vol, total_tracks, \
@@ -508,19 +537,18 @@ def get_mpd_artists():
 # ----------------------------
 # RADIO SETUP MENU
 # ----------------------------
-
 def audioHdmi(**kwargs):
-    # audio output to headphone jack
+    ''' audio output to headphone jack '''
     output = run_cmd("amixer -q cset numid=3 1")
 
 
 def audioHphone(**kwargs):
-    # audio output to HDMI port
+    ''' audio output to HDMI port '''
     run_cmd("amixer -q cset numid=3 2")
 
 
 def audioAuto(**kwargs):
-    # audio output auto-select
+    ''' audio output auto-select '''
     run_cmd("amixer -q cset numid=3 0")
 
 
@@ -593,8 +621,8 @@ def DoShutdown(**kwargs):
             LCD.clear()
             LCD.backlight(LCD.OFF)
             saveSettings()
-            subprocess.run(["sudo", "shutdown", "-h", "now"])
-            quit()
+            subprocess.run(["sudo", "shutdown", "-h", "now"], check=True)
+            sys.exit()
         time.sleep(0.25)
 
 
@@ -606,10 +634,11 @@ def LcdOn(**kwargs):
     LCD.backlight(LCD.ON)
 
 
-# Set the LCD color, kwargs has a key called 'text'
-# that is displayed on the lcd menu and used to set the color
-# on the physical lcd
 def SetLcdColor(**kwargs):
+    '''
+    Set the LCD color, kwargs has a key called 'text' that is displayed on the
+    lcd menu and used to set the color on the physical lcd
+    '''
     global cur_color
     text_to_color = {'Red': LCD.RED, 'Green': LCD.GREEN,
                      'Blue': LCD.BLUE, 'Yellow': LCD.YELLOW,
@@ -623,6 +652,7 @@ def SetLcdColor(**kwargs):
 
 
 def ShowDateTime(**kwargs):
+    ''' Show the data/time on lcd '''
     LCD.clear()
     while not(LCD.buttons()):
         time.sleep(0.25)
@@ -647,7 +677,7 @@ class Folder:
 
 def loaded_playlist():
     ''' return the name of the playlist currently being played '''
-    global mpdc, DEBUG
+    global mpdc
 
     client = mpdc['client']
     in_playlist = ''
@@ -658,14 +688,14 @@ def loaded_playlist():
         stored_playlists.append(name)
 
     current_playlist = []
-    for s in client.playlistinfo():
-        song = s['file']
+    for plistinfo in client.playlistinfo():
+        song = plistinfo['file']
         current_playlist.append(song)
 
     for plist in stored_playlists:
         tmp_playlist = []
-        for s in client.listplaylist(plist):
-            tmp_playlist.append(s)
+        for l_plist in client.listplaylist(plist):
+            tmp_playlist.append(l_plist)
 
         if tmp_playlist == current_playlist:
             if DEBUG:
@@ -681,7 +711,7 @@ def mpc_load_playlist(**kwargs):
     The name of the playlist comes from the menu selection that is there in
     kwargs['text']
     '''
-    global DEBUG, mpdc
+    global mpdc
 
     if DEBUG:
         print('In mpc_load_playlist() label: %s' % (kwargs['text']))
@@ -707,7 +737,7 @@ def mpc_load_artist(**kwargs):
     # TODO If the artist is already in effect, do NOT clear the playlist and
     start from 0
     '''
-    global DEBUG, mpdc
+    global mpdc
 
     if DEBUG:
         print('In mpc_load_artist() label: %s' % (kwargs['text']))
@@ -720,31 +750,32 @@ def mpc_load_artist(**kwargs):
     client.play('0')
 
     playerMode(**{})
-    return
 
 
-# Form the Playlist menu for the LCD
 def form_playlists_menu(folder):
-    global DEBUG, mpdc
+    '''
+    Form the Playlist menu for the LCD
+    '''
     for item in get_mpd_playlists():
         if DEBUG:
             print('adding item %s to folder %s' % (item, folder.text))
-        w = Widget(item,
-                   'mpc_load_playlist',
-                   {'text': item})
-        folder.items.append(w)
+        wdgt = Widget(item,
+                      'mpc_load_playlist',
+                      {'text': item})
+        folder.items.append(wdgt)
 
 
-# Form the Artist menu for the LCD
 def form_artists_menu(folder):
-    global DEBUG, mpdc
+    '''
+    Form the Artist menu for the LCD
+    '''
     for item in get_mpd_artists():
         if DEBUG:
             print('adding item %s to folder %s' % (item, folder.text))
-        w = Widget(item,
-                   'mpc_load_artist',
-                   {'text': item})
-        folder.items.append(w)
+        wdgt = Widget(item,
+                      'mpc_load_artist',
+                      {'text': item})
+        folder.items.append(wdgt)
 
 
 def ProcessNode(currentNode, currentFolder):
@@ -753,7 +784,6 @@ def ProcessNode(currentNode, currentFolder):
     currentFolder is of type Folder into which items from currentNode are to be
         added
     '''
-    global DEBUG
 
     dynamic_folder_handlers = {'Playlists': form_playlists_menu,
                                'Artists': form_artists_menu}
@@ -772,7 +802,7 @@ def ProcessNode(currentNode, currentFolder):
     children = currentNode.childNodes
 
     for child in children:
-        if isinstance(child, xml.dom.minidom.Element):
+        if isinstance(child, minidom.Element):
             # form a dict of all the attributes so that they can be used
             # by the widget later when/if needed
             attributes_d = {}
@@ -814,36 +844,37 @@ class Display:
                           }
 
     def display(self):
+        ''' decide what to display depending on where we are in the menu '''
         if self.curTopItem > len(self.curFolder.items) - DISPLAY_ROWS:
             self.curTopItem = len(self.curFolder.items) - DISPLAY_ROWS
         if self.curTopItem < 0:
             self.curTopItem = 0
         if DEBUG:
             print('------------------')
-        str = ''
+        lcd_str = ''
         for row in range(self.curTopItem, self.curTopItem+DISPLAY_ROWS):
             if row > self.curTopItem:
-                str += '\n'
+                lcd_str += '\n'
             if row < len(self.curFolder.items):
                 if row == self.curSelectedItem:
                     cmd = '-'+self.curFolder.items[row].text
                     if len(cmd) < 16:
-                        for row in range(len(cmd), 16):
+                        for _ in range(len(cmd), 16):
                             cmd += ' '
                     if DEBUG:
                         print('|'+cmd+'|')
-                    str += cmd
+                    lcd_str += cmd
                 else:
                     cmd = ' '+self.curFolder.items[row].text
                     if len(cmd) < 16:
-                        for row in range(len(cmd), 16):
+                        for _ in range(len(cmd), 16):
                             cmd += ' '
                     if DEBUG:
                         print('|'+cmd+'|')
-                    str += cmd
+                    lcd_str += cmd
         if DEBUG:
             print('------------------')
-        LCD_QUEUE.put((MSG_LCD, str), block=True)
+        LCD_QUEUE.put((MSG_LCD, lcd_str), block=True)
 
     def update(self, key):
         if key in self.upd_table:
@@ -930,30 +961,21 @@ def main():
     mpdc_init(mpdc)
     lcd_init()
 
-    # Create the lcd update worker thread and make it a daemon
-    lcd_thread = threading.Thread(target=lcd_worker, args=(LCD_QUEUE,))
-    lcd_thread.setDaemon(True)
-    lcd_thread.start()
+    thrds = threads_init()
+    player_init()
 
-    # Create the 2nd worker thread polling mpd and make it a daemon
-    mpd_thread = threading.Thread(target=mpd_poller, args=(LCD_QUEUE,))
-    mpd_thread.setDaemon(True)
-    mpd_thread.start()
-
-    radioInit()
-
-    uiItems = Folder('root', '')
+    ui_items = Folder('root', '')
 
     # parse an XML file by name
-    dom = parse(menufile)
+    dom = minidom.parse(MENUFILE)
 
     top = dom.documentElement
 
-    ProcessNode(top, uiItems)
+    ProcessNode(top, ui_items)
 
     playerMode(**{})
 
-    display = Display(uiItems)
+    display = Display(ui_items)
     display.display()
 
     if DEBUG:
@@ -964,13 +986,13 @@ def main():
         pressed = read_buttons()
         pressed &= 0x7F  # we are not interested in LONG_PRESS
 
-        if (pressed):
+        if pressed:
             display.update(pressed)
             display.display()
         time.sleep(0.15)
 
-    lcd_thread.join()
-    mpd_thread.join()
+    for thrd in thrds:
+        thrd.join()
 
 
 if __name__ == '__main__':
