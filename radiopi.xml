@@ -9,14 +9,14 @@
 
   <folder text="System Info">
     <widget text="IP Address" function="display_ipaddr" />
-    <widget text="Show Date/Time" function="ShowDateTime" />
+    <widget text="Show Date/Time" function="dt_show" />
     <folder text="LCD Color">
-      <widget text="Red" function="SetLcdColor" />
-      <widget text="Green" function="SetLcdColor" />
-      <widget text="Blue" function="SetLcdColor" />
-      <widget text="Yellow" function="SetLcdColor" />
-      <widget text="Teal" function="SetLcdColor" />
-      <widget text="Violet" function="SetLcdColor" />
+      <widget text="Red" function="lcd_set_color" />
+      <widget text="Green" function="lcd_set_color" />
+      <widget text="Blue" function="lcd_set_color" />
+      <widget text="Yellow" function="lcd_set_color" />
+      <widget text="Teal" function="lcd_set_color" />
+      <widget text="Violet" function="lcd_set_color" />
     </folder>
   </folder>
   <folder text="Audio Settings">
@@ -26,8 +26,8 @@
   </folder>
   <folder text="Radio Settings ">
   <widget text="Save Settings" function="saveSettingsWrapper" />
-  <widget text="Quit App" function="DoQuit" />
+  <widget text="Quit App" function="quit_app" />
   </folder>
-  <widget text="Shutdown" function="DoShutdown" />
+  <widget text="Shutdown" function="do_shutdown" />
 </application>
 

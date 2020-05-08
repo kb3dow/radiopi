@@ -30,8 +30,6 @@ import xml.dom.minidom as minidom
 # from xml.dom.minidom import *
 
 import socket
-import subprocess
-import time
 import sys
 import smbus
 
@@ -79,8 +77,8 @@ mpdc = {}
 MENUFILE = 'radiopi.xml'
 # set DEBUG=True/falst to enable/disable print debug statements
 DEBUG = True
-DISPLAY_ROWS = 2
-DISPLAY_COLS = 16
+LCD_ROWS = 2
+LCD_COLS = 16
 
 # set location
 locchosen = ['Laurel, MD', '39.1333', '-76.8435', 92]
@@ -255,7 +253,7 @@ def lcd_init():
     Setup AdaFruit LCD Plate
     '''
     global cur_color
-    LCD.begin(DISPLAY_COLS, DISPLAY_ROWS)
+    LCD.begin(LCD_COLS, LCD_ROWS)
     LCD.clear()
     LCD.backlight(cur_color)
 
@@ -303,6 +301,7 @@ def threads_init():
 
 
 def player_init():
+    ''' Init Player '''
     global cur_track, cur_vol,\
         total_tracks, cfgParser, INI_FILE
 
@@ -314,7 +313,7 @@ def player_init():
 
     time.sleep(2)
     LCD.clear()
-    if(cur_track > total_tracks):
+    if cur_track > total_tracks:
         cur_track = 1
 
     # Start music player
@@ -334,7 +333,7 @@ def mpc_next(client):
     '''
     global cur_track, total_tracks
     cur_track += 1
-    if(cur_track > total_tracks):
+    if cur_track > total_tracks:
         cur_track = 1
     if DEBUG:
         print('Track %d' % (cur_track))
@@ -348,7 +347,7 @@ def mpc_prev(client):
     '''
     global cur_track, total_tracks
     cur_track -= 1
-    if(cur_track < 1):
+    if cur_track < 1:
         cur_track = total_tracks
     client.previous()
     if DEBUG:
@@ -361,7 +360,7 @@ def mpc_vol_up(client, amt=5):
     Volume up
     '''
     global cur_vol
-    if(cur_vol <= (100-amt)):
+    if cur_vol <= (100-amt):
         cur_vol += amt
         client.setvol(cur_vol)
         if DEBUG:
@@ -375,7 +374,7 @@ def mpc_vol_down(client, amt=5):
     Volume down
     '''
     global cur_vol
-    if(cur_vol >= amt):
+    if cur_vol >= amt:
         cur_vol -= amt
         client.setvol(cur_vol)
         if DEBUG:
@@ -396,11 +395,11 @@ def mpc_toggle_pause(client):
 
 
 # Inside a playlist manage the buttons to play nex prev track
-def playerMode(**kwargs):
+def player_mode(**kwargs):
     global mpdc, display_mode_state
 
     if DEBUG:
-        print('inside playerMode - flushing')
+        print('inside player_mode - flushing')
 
     button_table = {SELECT: mpc_toggle_pause, LEFT: mpc_prev, RIGHT: mpc_next,
                     UP: mpc_vol_up, DOWN: mpc_vol_down}
@@ -419,7 +418,7 @@ def playerMode(**kwargs):
             continue
 
         # SELECT button long pressed
-        if(press == (LONG_PRESS | SELECT)):
+        if press == (LONG_PRESS | SELECT):
             break  # Return back to main menu
 
         # extre steps to handle the situation where the client
@@ -557,19 +556,18 @@ def display_ipaddr(**kwargs):
 
     # connect to google dns server and find the address
     # this shows the address of the link with the default route
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    s.connect(("8.8.8.8", 80))
-    ip_addr = s.getsockname()[0].ljust(16, ' ')
-    s.close()
+    sck = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sck.connect(("8.8.8.8", 80))
+    ip_addr = sck.getsockname()[0].ljust(16, ' ')
+    sck.close()
 
     LCD.backlight(LCD.VIOLET)
     i = 29
-    muting = False
     keep_looping = True
-    while (keep_looping):
+    while keep_looping:
         # Every 1/2 second, update the time display
         i += 1
-        if(i % 5 == 0):
+        if i % 5 == 0:
             LCD_QUEUE.put((MSG_LCD,
                            datetime.datetime.now().strftime(
                                '%b %d  %H:%M:%S\n') +
@@ -580,7 +578,7 @@ def display_ipaddr(**kwargs):
         # Take action on switch press
 
         # SELECT button = exit
-        if(press):
+        if press:
             keep_looping = False
 
         delay_milliseconds(99)
@@ -598,7 +596,8 @@ def run_cmd(cmd):
 
 
 # commands
-def DoQuit(**kwargs):
+def quit_app(**kwargs):
+    ''' quit the app '''
     LCD.clear()
     LCD.message('Are you sure?\nPress Sel for Y')
     while 1:
@@ -607,11 +606,12 @@ def DoQuit(**kwargs):
         if LCD.buttonPressed(LCD.SELECT):
             LCD.clear()
             LCD.backlight(LCD.OFF)
-            quit()
+            sys.exit()
         time.sleep(0.25)
 
 
-def DoShutdown(**kwargs):
+def do_shutdown(**kwargs):
+    ''' Shutdown the board '''
     LCD.clear()
     LCD.message('Are you sure?\nPress Sel for Y')
     while 1:
@@ -626,15 +626,17 @@ def DoShutdown(**kwargs):
         time.sleep(0.25)
 
 
-def LcdOff(**kwargs):
+def lcd_turn_off(**kwargs):
+    ''' Turn LCD OFF '''
     LCD.backlight(LCD.OFF)
 
 
-def LcdOn(**kwargs):
+def lcd_turn_on(**kwargs):
+    ''' Turn LCD ON '''
     LCD.backlight(LCD.ON)
 
 
-def SetLcdColor(**kwargs):
+def lcd_set_color(**kwargs):
     '''
     Set the LCD color, kwargs has a key called 'text' that is displayed on the
     lcd menu and used to set the color on the physical lcd
@@ -651,10 +653,10 @@ def SetLcdColor(**kwargs):
         LCD.backlight(cur_color)
 
 
-def ShowDateTime(**kwargs):
+def dt_show(**kwargs):
     ''' Show the data/time on lcd '''
     LCD.clear()
-    while not(LCD.buttons()):
+    while not LCD.buttons():
         time.sleep(0.25)
         LCD_QUEUE.put((MSG_LCD,
                        time.strftime('%a %b %d %Y\n%I:%M:%S %p',
@@ -662,6 +664,7 @@ def ShowDateTime(**kwargs):
 
 
 class Widget:
+    ''' Widget Class for lcd items '''
     def __init__(self, myName, myFunction, kwargs):
         self.text = myName
         self.function = myFunction
@@ -669,6 +672,7 @@ class Widget:
 
 
 class Folder:
+    ''' Folder Class for lcd items '''
     def __init__(self, myName, myParent):
         self.text = myName
         self.items = []
@@ -724,7 +728,7 @@ def mpc_load_playlist(**kwargs):
         client.load(playlist_name)
         client.play('0')
 
-    playerMode(**{})
+    player_mode(**{})
     return
 
 
@@ -749,7 +753,7 @@ def mpc_load_artist(**kwargs):
     client.findadd('artist', artist)
     client.play('0')
 
-    playerMode(**{})
+    player_mode(**{})
 
 
 def form_playlists_menu(folder):
@@ -778,7 +782,7 @@ def form_artists_menu(folder):
         folder.items.append(wdgt)
 
 
-def ProcessNode(currentNode, currentFolder):
+def process_node(currentNode, currentFolder):
     '''
     currentNode is a dom.documentElement - a folder node from xml
     currentFolder is of type Folder into which items from currentNode are to be
@@ -790,8 +794,8 @@ def ProcessNode(currentNode, currentFolder):
     current_node_text = currentNode.getAttribute('text')
 
     if DEBUG:
-        print('IN ProcessNode(%s, %s)' % (current_node_text,
-                                          currentFolder.text))
+        print('IN process_node(%s, %s)' % (current_node_text,
+                                           currentFolder.text))
 
     if currentFolder.text in dynamic_folder_handlers:
         if DEBUG:
@@ -806,20 +810,20 @@ def ProcessNode(currentNode, currentFolder):
             # form a dict of all the attributes so that they can be used
             # by the widget later when/if needed
             attributes_d = {}
-            for a in child.attributes.values():
-                attributes_d[a.name] = a.value
+            for cav in child.attributes.values():
+                attributes_d[cav.name] = cav.value
 
             child_text_attrib = child.getAttribute('text')
 
             if child.tagName == 'folder':
-                thisFolder = Folder(child_text_attrib, currentFolder)
-                currentFolder.items.append(thisFolder)
-                ProcessNode(child, thisFolder)
+                this_folder = Folder(child_text_attrib, currentFolder)
+                currentFolder.items.append(this_folder)
+                process_node(child, this_folder)
             elif child.tagName == 'widget':
-                thisWidget = Widget(child_text_attrib,
-                                    child.getAttribute('function'),
-                                    attributes_d)
-                currentFolder.items.append(thisWidget)
+                this_widget = Widget(child_text_attrib,
+                                     child.getAttribute('function'),
+                                     attributes_d)
+                currentFolder.items.append(this_widget)
             '''
             elif child.tagName == 'run':
                 thisCommand = CommandToRun(child_text_attrib,
@@ -831,10 +835,11 @@ def ProcessNode(currentNode, currentFolder):
 
 
 class Display:
+    ''' Class for sending info to LCD display '''
     def __init__(self, folder):
-        self.curFolder = folder
-        self.curTopItem = 0
-        self.curSelectedItem = 0
+        self.current_folder = folder
+        self.current_top_item = 0
+        self.current_selected_item = 0
         # Map keys hit to functions
         self.upd_table = {LEFT: self.left,
                           RIGHT: self.right,
@@ -845,19 +850,20 @@ class Display:
 
     def display(self):
         ''' decide what to display depending on where we are in the menu '''
-        if self.curTopItem > len(self.curFolder.items) - DISPLAY_ROWS:
-            self.curTopItem = len(self.curFolder.items) - DISPLAY_ROWS
-        if self.curTopItem < 0:
-            self.curTopItem = 0
+        if self.current_top_item > len(self.current_folder.items) - LCD_ROWS:
+            self.current_top_item = len(self.current_folder.items) - LCD_ROWS
+        if self.current_top_item < 0:
+            self.current_top_item = 0
         if DEBUG:
             print('------------------')
         lcd_str = ''
-        for row in range(self.curTopItem, self.curTopItem+DISPLAY_ROWS):
-            if row > self.curTopItem:
+        for row in range(self.current_top_item,
+                         self.current_top_item+LCD_ROWS):
+            if row > self.current_top_item:
                 lcd_str += '\n'
-            if row < len(self.curFolder.items):
-                if row == self.curSelectedItem:
-                    cmd = '-'+self.curFolder.items[row].text
+            if row < len(self.current_folder.items):
+                if row == self.current_selected_item:
+                    cmd = '-'+self.current_folder.items[row].text
                     if len(cmd) < 16:
                         for _ in range(len(cmd), 16):
                             cmd += ' '
@@ -865,7 +871,7 @@ class Display:
                         print('|'+cmd+'|')
                     lcd_str += cmd
                 else:
-                    cmd = ' '+self.curFolder.items[row].text
+                    cmd = ' '+self.current_folder.items[row].text
                     if len(cmd) < 16:
                         for _ in range(len(cmd), 16):
                             cmd += ' '
@@ -881,67 +887,78 @@ class Display:
             self.upd_table[key]()
 
     def up(self):
-        if self.curSelectedItem == 0:
+        if self.current_selected_item == 0:
             return
-        elif self.curSelectedItem > self.curTopItem:
-            self.curSelectedItem -= 1
+        elif self.current_selected_item > self.current_top_item:
+            self.current_selected_item -= 1
         else:
-            self.curTopItem -= 1
-            self.curSelectedItem -= 1
+            self.current_top_item -= 1
+            self.current_selected_item -= 1
 
     def down(self):
-        if self.curSelectedItem+1 == len(self.curFolder.items):
+        if self.current_selected_item+1 == len(self.current_folder.items):
             return
-        elif self.curSelectedItem < self.curTopItem+DISPLAY_ROWS-1:
-            self.curSelectedItem += 1
+        elif self.current_selected_item < self.current_top_item+LCD_ROWS-1:
+            self.current_selected_item += 1
         else:
-            self.curTopItem += 1
-            self.curSelectedItem += 1
+            self.current_top_item += 1
+            self.current_selected_item += 1
 
     def left(self):
-        if isinstance(self.curFolder.parent, Folder):
+        if isinstance(self.current_folder.parent, Folder):
             # find the current in the parent
             itemno = 0
             index = 0
-            for item in self.curFolder.parent.items:
-                if self.curFolder == item:
+            for item in self.current_folder.parent.items:
+                if self.current_folder == item:
                     if DEBUG:
                         print('foundit')
                     index = itemno
                 else:
                     itemno += 1
-            if index < len(self.curFolder.parent.items):
-                self.curFolder = self.curFolder.parent
-                self.curTopItem = index
-                self.curSelectedItem = index
+            if index < len(self.current_folder.parent.items):
+                self.current_folder = self.current_folder.parent
+                self.current_top_item = index
+                self.current_selected_item = index
             else:
-                self.curFolder = self.curFolder.parent
-                self.curTopItem = 0
-                self.curSelectedItem = 0
+                self.current_folder = self.current_folder.parent
+                self.current_top_item = 0
+                self.current_selected_item = 0
 
     def right(self):
-        if isinstance(self.curFolder.items[self.curSelectedItem], Folder):
-            self.curFolder = self.curFolder.items[self.curSelectedItem]
-            self.curTopItem = 0
-            self.curSelectedItem = 0
-        elif isinstance(self.curFolder.items[self.curSelectedItem], Widget):
+        if isinstance(self.current_folder.items[self.current_selected_item],
+                      Folder):
+            self.current_folder \
+                = self.current_folder.items[self.current_selected_item]
+            self.current_top_item = 0
+            self.current_selected_item = 0
+        elif isinstance(self.current_folder.items[self.current_selected_item],
+                        Widget):
             if DEBUG:
                 print('going to call %s()' %
-                      (self.curFolder.items[self.curSelectedItem].function))
-            eval(self.curFolder.items[self.curSelectedItem].function +
-                 '(**self.curFolder.items[self.curSelectedItem].kwargs)')
+                      (self.current_folder.items[self.current_selected_item]
+                       .function))
+            eval(self.current_folder.items[self.current_selected_item].function
+                 + '(**self.current_folder.items'
+                 '[self.current_selected_item].kwargs)')
 
     def select(self):
-        if isinstance(self.curFolder.items[self.curSelectedItem], Folder):
-            self.curFolder = self.curFolder.items[self.curSelectedItem]
-            self.curTopItem = 0
-            self.curSelectedItem = 0
-        elif isinstance(self.curFolder.items[self.curSelectedItem], Widget):
+        if isinstance(self.current_folder.items[self.current_selected_item],
+                      Folder):
+            self.current_folder = self.current_folder.items[
+                self.current_selected_item]
+            self.current_top_item = 0
+            self.current_selected_item = 0
+        elif isinstance(self.current_folder.items[self.current_selected_item],
+                        Widget):
             if DEBUG:
                 print('going to call %s()' %
-                      (self.curFolder.items[self.curSelectedItem].function))
-            eval(self.curFolder.items[self.curSelectedItem].function
-                 + '(**self.curFolder.items[self.curSelectedItem].kwargs)')
+                      (self.current_folder.items[self.current_selected_item]
+                       .function))
+            eval(self.current_folder.items
+                 [self.current_selected_item].function
+                 + '(**self.current_folder.items'
+                 '[self.current_selected_item].kwargs)')
 
 
 # ----------------------------
@@ -971,9 +988,9 @@ def main():
 
     top = dom.documentElement
 
-    ProcessNode(top, ui_items)
+    process_node(top, ui_items)
 
-    playerMode(**{})
+    player_mode(**{})
 
     display = Display(ui_items)
     display.display()
