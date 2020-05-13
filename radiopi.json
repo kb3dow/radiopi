@@ -1,0 +1,13 @@
+{
+    "rpi_player": {
+        "volume": 33,
+        "track": 6,
+        "lcdcolor": 4,
+        "playlist": "Carnatic"
+    },
+    "mpdclient": {
+        "port": 6600,
+        "timeout": 3600,
+        "host": "localhost"
+    }
+}

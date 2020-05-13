@@ -25,13 +25,12 @@ import subprocess
 import time
 import queue
 import threading
-import configparser
 import xml.dom.minidom as minidom
 # from xml.dom.minidom import *
-
 import socket
 import sys
-import smbus
+
+from AppConfig import AppConfig
 
 from mpd import (MPDClient, MPDError, ConnectionError)
 
@@ -47,31 +46,18 @@ LCD = Adafruit_CharLCDPlate(busnum=1)
 
 # Define a queue to communicate with worker thread
 LCD_QUEUE = queue.Queue()
-cfgParser = configparser.ConfigParser()
 
 LCD_PLAYER_MODE = 0
 LCD_MENU_MODE = 1
 
 # Globals
-INI_FILE = 'radiopi.ini'
-cur_playlist = ''
 cur_track = 1
 total_tracks = 0
-min_vol = 0
-max_vol = 100
-def_vol = 50
-cur_vol = min_vol  # Current volume
-new_vol = def_vol  # 'Next' volume after interactions
-spd_vol = 1.0      # Speed of volume change (accelerates w/hold)
+cur_vol = 0  # Current volume
 set_vol = False    # True if currently setting volume
-paused = False    # True if music is paused
 def_color = LCD.VIOLET
 cur_color = def_color
-bar_width = 7.0          # Vol Bar width on display
-rng_vol = max_vol - min_vol + 1
-vol_solbar = rng_vol / bar_width
-vol_line = vol_solbar / 5.0  # There are 5 vert lines per char display
-display_mode_state = LCD_PLAYER_MODE
+display_mode_state = LCD_MENU_MODE
 mpdc = {}
 
 MENUFILE = 'radiopi.xml'
@@ -79,9 +65,6 @@ MENUFILE = 'radiopi.xml'
 DEBUG = True
 LCD_ROWS = 2
 LCD_COLS = 16
-
-# set location
-locchosen = ['Laurel, MD', '39.1333', '-76.8435', 92]
 
 # Buttons
 NONE = 0x00
@@ -216,46 +199,30 @@ def lcd_worker(q):
             LCD.setCursor(0, 0)
             LCD.message(msg)
         elif msg_type == MSG_SAVE:
-            saveSettings()
+            settings_save()
 
         q.task_done()
 
 
-def settingsLoad(mpdc, cfgp, cfgfile):
-    global cur_track, cur_vol, cfgParser
-    global cur_color
-    # Read INI file
-    if DEBUG:
-        print('loading saved settings')
-    try:
-        cfgp.read(cfgfile)
-        cur_vol = cfgParser.getint('settings_section', 'volume')
-        cur_track = cfgParser.getint('settings_section', 'track')
-        cur_color = cfgParser.getint('settings_section', 'lcdcolor')
-        cur_playlist = cfgParser.get('settings_section', 'playlist')
-        mpdc['host'] = cfgParser.get('mpdclient_section', 'host')
-        mpdc['timeout'] = cfgParser.getint('mpdclient_section', 'timeout')
-        mpdc['port'] = cfgParser.getint('mpdclient_section', 'port')
-    except Exception as e:
-        print('Exception: {}'.format(e))
-        sys.exit()
+def settings_load():
+    ''' load settings from yaml file '''
+    AppConfig.config_load()
 
 
-def mpdc_init(mpdc):
+def mpdc_init():
+    ''' Setup music player daemon client '''
     client = MPDClient()
-    client.timeout = mpdc['timeout']
-    client.connect(mpdc['host'], mpdc['port'])
-    mpdc['client'] = client
+    client.timeout = AppConfig.config('timeout', 'mpdclient')
+    client.connect(AppConfig.config('host', 'mpdclient'),
+                   AppConfig.config('port', 'mpdclient'))
+    return client
 
 
 def lcd_init():
-    '''
-    Setup AdaFruit LCD Plate
-    '''
-    global cur_color
+    ''' Setup AdaFruit LCD Plate '''
     LCD.begin(LCD_COLS, LCD_ROWS)
     LCD.clear()
-    LCD.backlight(cur_color)
+    LCD.backlight(AppConfig.config('lcdcolor', 'rpi_player'))
 
     # Create volume bargraph custom characters (chars 0-5):
     for i in range(6):
@@ -302,8 +269,7 @@ def threads_init():
 
 def player_init():
     ''' Init Player '''
-    global cur_track, cur_vol,\
-        total_tracks, cfgParser, INI_FILE
+    global cur_track, cur_vol, total_tracks
 
     # Stop music player
     # output = run_cmd("mpc stop") # NOTE: no need to stop what was playing
@@ -320,35 +286,27 @@ def player_init():
     if DEBUG:
         print('starting player with track {}'.format(cur_track))
 
-    run_cmd("mpc volume " + str(cur_vol))
-    run_cmd("mpc volume +2")
-    run_cmd("mpc volume -2")
-
-    return
-
 
 def mpc_next(client):
-    '''
-    Play the next track in current playlist
-    '''
+    ''' Play the next track in current playlist '''
     global cur_track, total_tracks
     cur_track += 1
     if cur_track > total_tracks:
         cur_track = 1
     if DEBUG:
         print('Track %d' % (cur_track))
+    # TODO fix for wraparound
     client.next()
     return True
 
 
 def mpc_prev(client):
-    '''
-    Play the prev track in current playlist
-    '''
+    ''' Play the prev track in current playlist '''
     global cur_track, total_tracks
     cur_track -= 1
     if cur_track < 1:
         cur_track = total_tracks
+    # TODO fix for wraparound
     client.previous()
     if DEBUG:
         print('Track  % d' % (cur_track))
@@ -356,9 +314,7 @@ def mpc_prev(client):
 
 
 def mpc_vol_up(client, amt=5):
-    '''
-    Volume up
-    '''
+    ''' Volume up '''
     global cur_vol
     if cur_vol <= (100-amt):
         cur_vol += amt
@@ -370,9 +326,7 @@ def mpc_vol_up(client, amt=5):
 
 
 def mpc_vol_down(client, amt=5):
-    '''
-    Volume down
-    '''
+    ''' Volume down '''
     global cur_vol
     if cur_vol >= amt:
         cur_vol -= amt
@@ -384,6 +338,7 @@ def mpc_vol_down(client, amt=5):
 
 
 def mpc_toggle_pause(client):
+    ''' toggle pause/play '''
     status = client.status()
     state = status['state']
     # if state is pause/stop then play. If play then pause
@@ -394,15 +349,20 @@ def mpc_toggle_pause(client):
     return True
 
 
-# Inside a playlist manage the buttons to play nex prev track
 def player_mode(**kwargs):
+    '''
+    Inside a playlist manage the buttons to play nex prev track
+    '''
     global mpdc, display_mode_state
 
     if DEBUG:
         print('inside player_mode - flushing')
 
-    button_table = {SELECT: mpc_toggle_pause, LEFT: mpc_prev, RIGHT: mpc_next,
-                    UP: mpc_vol_up, DOWN: mpc_vol_down}
+    button_table = {SELECT: mpc_toggle_pause,
+                    LEFT: mpc_prev,
+                    RIGHT: mpc_next,
+                    UP: mpc_vol_up,
+                    DOWN: mpc_vol_down}
     display_mode_state_old = display_mode_state
     display_mode_state = LCD_PLAYER_MODE
 
@@ -445,7 +405,6 @@ def player_mode(**kwargs):
             continue
 
     display_mode_state = display_mode_state_old
-    return
 
 
 def flush_buttons():
@@ -485,27 +444,22 @@ def delay_milliseconds(milliseconds):
     time.sleep(seconds)
 
 
-def saveSettings():
-    global cur_track, cur_vol, total_tracks, \
-        cfgParser, INI_FILE
-    cfgParser.set('settings_section', 'volume', str(cur_vol))
-    cfgParser.set('settings_section', 'station', str(cur_track))
-    cfgParser.set('settings_section', 'lcdcolor', str(cur_color))
-    # Write our configuration file
-    with open(INI_FILE, 'wb') as configfile:
-        cfgParser.write(configfile)
+def settings_save():
+    ''' save settings to file '''
+    AppConfig.config_save()
 
 
 def saveSettingsWrapper(**kwargs):
+    ''' display message on lcd and save settings '''
     LCD_QUEUE.put((MSG_LCD, "Saving          \nSettings ...    "), block=True)
-    saveSettings()
+    settings_save()
     time.sleep(1)
     LCD_QUEUE.put((MSG_LCD, "Settings        \nSaved ...       "), block=True)
     time.sleep(2)
 
 
-# Get the names of all playlists known to mpd
 def get_mpd_playlists():
+    ''' Get the names of all playlists known to mpd '''
     global mpdc
     mpd_playlists = []
 
@@ -519,8 +473,8 @@ def get_mpd_playlists():
     return mpd_playlists
 
 
-# Get the names of all artists known to mpd
 def get_mpd_artists():
+    ''' Get the names of all artists known to mpd '''
     global mpdc
     stored_artists = []
 
@@ -552,6 +506,7 @@ def audioAuto(**kwargs):
 
 
 def display_ipaddr(**kwargs):
+    ''' show IP addr on display '''
     global cur_color
 
     # connect to google dns server and find the address
@@ -620,7 +575,7 @@ def do_shutdown(**kwargs):
         if LCD.buttonPressed(LCD.SELECT):
             LCD.clear()
             LCD.backlight(LCD.OFF)
-            saveSettings()
+            settings_save()
             subprocess.run(["sudo", "shutdown", "-h", "now"], check=True)
             sys.exit()
         time.sleep(0.25)
@@ -969,13 +924,13 @@ def main():
     Main function to init stuff and start player
     '''
 
-    global cfgParser, INI_FILE, mpdc
+    global mpdc
 
     if DEBUG:
         print('entering main()')
 
-    settingsLoad(mpdc, cfgParser, INI_FILE)
-    mpdc_init(mpdc)
+    settings_load()
+    mpdc = mpdc_init()
     lcd_init()
 
     thrds = threads_init()
