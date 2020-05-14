@@ -29,15 +29,13 @@ import xml.dom.minidom as minidom
 # from xml.dom.minidom import *
 import socket
 import sys
-
-from AppConfig import AppConfig
-
 from mpd import (MPDClient, MPDError, ConnectionError)
 
-from Adafruit.Adafruit_I2C import Adafruit_I2C
-from Adafruit.Adafruit_MCP230xx import Adafruit_MCP230XX
+# from Adafruit.Adafruit_I2C import Adafruit_I2C
+# from Adafruit.Adafruit_MCP230xx import Adafruit_MCP230XX
 from Adafruit.Adafruit_CharLCDPlate import Adafruit_CharLCDPlate
-import utils.cmd
+# import utils.cmd
+from AppConfig import AppConfig
 
 # initialize the LCD plate
 #   use busnum = 0 for raspi version 1 (256MB)
@@ -54,11 +52,9 @@ LCD_MENU_MODE = 1
 cur_track = 1
 total_tracks = 0
 cur_vol = 0  # Current volume
-set_vol = False    # True if currently setting volume
-def_color = LCD.VIOLET
-cur_color = def_color
 display_mode_state = LCD_MENU_MODE
-mpdc = {}
+
+mpd_client = MPDClient()
 
 MENUFILE = 'radiopi.xml'
 # set DEBUG=True/falst to enable/disable print debug statements
@@ -109,6 +105,12 @@ charSevenBitmaps = [[0b10000,  # Play (also selected station)
                      0b00000]]
 
 
+def dbg_print(msg):
+    ''' debug print message '''
+    if DEBUG:
+        print(msg)
+
+
 # ----------------------------
 # WORKER THREADS
 # ----------------------------
@@ -120,9 +122,8 @@ def get_mpd_info(lcd_q, client):
     try:
         cso = client.currentsong()
         cst = client.status()
-        if DEBUG:
-            print(cso)
-            print(cst)
+        dbg_print(cso)
+        dbg_print(cst)
 
         # show the symbol if it is in play/stop/pause
         if 'state' in cst and cst['state'] == 'play':
@@ -161,9 +162,11 @@ def mpd_poller(lcd_q):
     # seperately, default: None
     client.idletimeout = 60  # keep refreshing every minute even if no change
     while True:
-        client.connect("localhost", 6600)  # connect to localhost:6600
-        if DEBUG:
-            print(client.status())
+        client.connect(AppConfig.get('host', 'mpdclient'),
+                       AppConfig.get('port', 'mpdclient'))
+        # connect to localhost:6600
+
+        dbg_print(client.status())
         while True:
             try:
                 client.idle()
@@ -211,18 +214,16 @@ def settings_load():
 
 def mpdc_init():
     ''' Setup music player daemon client '''
-    client = MPDClient()
-    client.timeout = AppConfig.config('timeout', 'mpdclient')
-    client.connect(AppConfig.config('host', 'mpdclient'),
-                   AppConfig.config('port', 'mpdclient'))
-    return client
+    mpd_client.timeout = AppConfig.get('timeout', 'mpdclient')
+    mpd_client.connect(AppConfig.get('host', 'mpdclient'),
+                       AppConfig.get('port', 'mpdclient'))
 
 
 def lcd_init():
     ''' Setup AdaFruit LCD Plate '''
     LCD.begin(LCD_COLS, LCD_ROWS)
     LCD.clear()
-    LCD.backlight(AppConfig.config('lcdcolor', 'rpi_player'))
+    LCD.backlight(AppConfig.get('lcdcolor', 'rpi_player'))
 
     # Create volume bargraph custom characters (chars 0-5):
     for i in range(6):
@@ -269,7 +270,7 @@ def threads_init():
 
 def player_init():
     ''' Init Player '''
-    global cur_track, cur_vol, total_tracks
+    global cur_track, total_tracks
 
     # Stop music player
     # output = run_cmd("mpc stop") # NOTE: no need to stop what was playing
@@ -282,9 +283,7 @@ def player_init():
     if cur_track > total_tracks:
         cur_track = 1
 
-    # Start music player
-    if DEBUG:
-        print('starting player with track {}'.format(cur_track))
+    dbg_print('starting player with track {}'.format(cur_track))
 
 
 def mpc_next(client):
@@ -293,8 +292,7 @@ def mpc_next(client):
     cur_track += 1
     if cur_track > total_tracks:
         cur_track = 1
-    if DEBUG:
-        print('Track %d' % (cur_track))
+    dbg_print('Track %d' % (cur_track))
     # TODO fix for wraparound
     client.next()
     return True
@@ -308,8 +306,7 @@ def mpc_prev(client):
         cur_track = total_tracks
     # TODO fix for wraparound
     client.previous()
-    if DEBUG:
-        print('Track  % d' % (cur_track))
+    dbg_print('Track  % d' % (cur_track))
     return True
 
 
@@ -319,8 +316,7 @@ def mpc_vol_up(client, amt=5):
     if cur_vol <= (100-amt):
         cur_vol += amt
         client.setvol(cur_vol)
-        if DEBUG:
-            print('Setting Volume  % d' % (cur_vol))
+        dbg_print('Setting Volume  % d' % (cur_vol))
         return True
     return False
 
@@ -331,8 +327,7 @@ def mpc_vol_down(client, amt=5):
     if cur_vol >= amt:
         cur_vol -= amt
         client.setvol(cur_vol)
-        if DEBUG:
-            print('Setting Volume  % d' % (cur_vol))
+        dbg_print('Setting Volume  % d' % (cur_vol))
         return True
     return False
 
@@ -344,8 +339,7 @@ def mpc_toggle_pause(client):
     # if state is pause/stop then play. If play then pause
     pause = 1 if state == 'play' else 0
     client.pause(pause)
-    if DEBUG:
-        print('Toggling play/pause')
+    dbg_print('Toggling play/pause')
     return True
 
 
@@ -353,10 +347,9 @@ def player_mode(**kwargs):
     '''
     Inside a playlist manage the buttons to play nex prev track
     '''
-    global mpdc, display_mode_state
+    global display_mode_state
 
-    if DEBUG:
-        print('inside player_mode - flushing')
+    dbg_print('inside player_mode - flushing')
 
     button_table = {SELECT: mpc_toggle_pause,
                     LEFT: mpc_prev,
@@ -367,8 +360,6 @@ def player_mode(**kwargs):
     display_mode_state = LCD_PLAYER_MODE
 
     flush_buttons()
-
-    client = mpdc['client']
 
     while True:
         press = read_buttons()
@@ -381,16 +372,16 @@ def player_mode(**kwargs):
         if press == (LONG_PRESS | SELECT):
             break  # Return back to main menu
 
-        # extre steps to handle the situation where the client
+        # extre steps to handle the situation where the mpd_client
         # connection seems to timeout while waiting
         try:
-            client.status()
+            mpd_client.status()
         except ConnectionError:
-            # client.close()  # doing a close under error condition causes
+            # mpd_client.close()  # doing a close under error condition causes
             # error again
-            client.connect("localhost", 6600)  # connect to localhost:6600
+            mpd_client.connect("localhost", 6600)  # connect to localhost:6600
             continue
-        except Exception as e:
+        except MPDError as e:
             print('Exception: {}'.format(e))
             continue
 
@@ -398,7 +389,7 @@ def player_mode(**kwargs):
         try:
             # Call the function handling the type of button press
             if press in button_table:
-                button_table[press](client)
+                button_table[press](mpd_client)
 
         except Exception as e:
             print('Exception: {}'.format(e))
@@ -449,7 +440,7 @@ def settings_save():
     AppConfig.config_save()
 
 
-def saveSettingsWrapper(**kwargs):
+def save_settings_wrapper(**kwargs):
     ''' display message on lcd and save settings '''
     LCD_QUEUE.put((MSG_LCD, "Saving          \nSettings ...    "), block=True)
     settings_save()
@@ -460,29 +451,24 @@ def saveSettingsWrapper(**kwargs):
 
 def get_mpd_playlists():
     ''' Get the names of all playlists known to mpd '''
-    global mpdc
     mpd_playlists = []
 
-    client = mpdc['client']
-    for t in client.listplaylists():
-        if DEBUG:
-            print('available playlists')
-            print(t)
-        mpd_playlists.append(t['playlist'])
+    for playlist in mpd_client.listplaylists():
+        dbg_print('available playlists')
+        dbg_print(playlist)
+        mpd_playlists.append(playlist['playlist'])
 
     return mpd_playlists
 
 
 def get_mpd_artists():
     ''' Get the names of all artists known to mpd '''
-    global mpdc
     stored_artists = []
 
-    client = mpdc['client']
-    for pl in client.listplaylists():
-        for s in client.listplaylistinfo(pl['playlist']):
-            if 'artist' in s and s['artist'] not in stored_artists:
-                stored_artists.append(s['artist'])
+    for playlist in mpd_client.listplaylists():
+        for song in mpd_client.listplaylistinfo(playlist['playlist']):
+            if 'artist' in song and song['artist'] not in stored_artists:
+                stored_artists.append(song['artist'])
 
     return stored_artists
 
@@ -490,24 +476,23 @@ def get_mpd_artists():
 # ----------------------------
 # RADIO SETUP MENU
 # ----------------------------
-def audioHdmi(**kwargs):
-    ''' audio output to headphone jack '''
-    output = run_cmd("amixer -q cset numid=3 1")
+def audio_hdmi(**kwargs):
+    ''' audio output to HDMI jack '''
+    run_cmd("amixer -q cset numid=3 1")
 
 
-def audioHphone(**kwargs):
-    ''' audio output to HDMI port '''
+def audio_headphone(**kwargs):
+    ''' audio output to headphone port '''
     run_cmd("amixer -q cset numid=3 2")
 
 
-def audioAuto(**kwargs):
+def audio_auto(**kwargs):
     ''' audio output auto-select '''
     run_cmd("amixer -q cset numid=3 0")
 
 
 def display_ipaddr(**kwargs):
     ''' show IP addr on display '''
-    global cur_color
 
     # connect to google dns server and find the address
     # this shows the address of the link with the default route
@@ -538,10 +523,11 @@ def display_ipaddr(**kwargs):
 
         delay_milliseconds(99)
 
-    LCD.backlight(cur_color)
+    LCD.backlight(AppConfig.get('lcdcolor', 'rpi_player'))
 
 
 def run_cmd(cmd):
+    ''' run an external command '''
     p = subprocess.Popen(cmd,
                          shell=True,
                          stdout=subprocess.PIPE,
@@ -596,16 +582,15 @@ def lcd_set_color(**kwargs):
     Set the LCD color, kwargs has a key called 'text' that is displayed on the
     lcd menu and used to set the color on the physical lcd
     '''
-    global cur_color
     text_to_color = {'Red': LCD.RED, 'Green': LCD.GREEN,
                      'Blue': LCD.BLUE, 'Yellow': LCD.YELLOW,
                      'Teal': LCD.TEAL, 'Violet': LCD.VIOLET, }
 
     if 'text' in kwargs and kwargs['text'] in text_to_color:
-        if DEBUG:
-            print('setting LCD to {}'.format(kwargs['text']))
-        cur_color = text_to_color[kwargs['text']]
-        LCD.backlight(cur_color)
+        dbg_print('setting LCD to {}'.format(kwargs['text']))
+        color = text_to_color[kwargs['text']]
+        LCD.backlight(color)
+        AppConfig.set(color, 'lcdcolor', 'rpi_player')
 
 
 def dt_show(**kwargs):
@@ -636,29 +621,25 @@ class Folder:
 
 def loaded_playlist():
     ''' return the name of the playlist currently being played '''
-    global mpdc
-
-    client = mpdc['client']
     in_playlist = ''
 
     stored_playlists = []
-    for i in client.listplaylists():
+    for i in mpd_client.listplaylists():
         name = i['playlist']
         stored_playlists.append(name)
 
     current_playlist = []
-    for plistinfo in client.playlistinfo():
+    for plistinfo in mpd_client.playlistinfo():
         song = plistinfo['file']
         current_playlist.append(song)
 
     for plist in stored_playlists:
         tmp_playlist = []
-        for l_plist in client.listplaylist(plist):
+        for l_plist in mpd_client.listplaylist(plist):
             tmp_playlist.append(l_plist)
 
         if tmp_playlist == current_playlist:
-            if DEBUG:
-                print("Currently in playlist: {}".format(plist))
+            dbg_print("Currently in playlist: {}".format(plist))
             in_playlist = plist
             break
     return in_playlist
@@ -670,18 +651,14 @@ def mpc_load_playlist(**kwargs):
     The name of the playlist comes from the menu selection that is there in
     kwargs['text']
     '''
-    global mpdc
+    dbg_print('In mpc_load_playlist() label: %s' % (kwargs['text']))
 
-    if DEBUG:
-        print('In mpc_load_playlist() label: %s' % (kwargs['text']))
-
-    client = mpdc['client']
     playlist_name = kwargs['text']
 
     if playlist_name != loaded_playlist():
-        client.clear()
-        client.load(playlist_name)
-        client.play('0')
+        mpd_client.clear()
+        mpd_client.load(playlist_name)
+        mpd_client.play('0')
 
     player_mode(**{})
     return
@@ -696,17 +673,13 @@ def mpc_load_artist(**kwargs):
     # TODO If the artist is already in effect, do NOT clear the playlist and
     start from 0
     '''
-    global mpdc
+    dbg_print('In mpc_load_artist() label: %s' % (kwargs['text']))
 
-    if DEBUG:
-        print('In mpc_load_artist() label: %s' % (kwargs['text']))
-
-    client = mpdc['client']
     artist = kwargs['text']
 
-    client.clear()
-    client.findadd('artist', artist)
-    client.play('0')
+    mpd_client.clear()
+    mpd_client.findadd('artist', artist)
+    mpd_client.play('0')
 
     player_mode(**{})
 
@@ -716,8 +689,7 @@ def form_playlists_menu(folder):
     Form the Playlist menu for the LCD
     '''
     for item in get_mpd_playlists():
-        if DEBUG:
-            print('adding item %s to folder %s' % (item, folder.text))
+        dbg_print('adding item %s to folder %s' % (item, folder.text))
         wdgt = Widget(item,
                       'mpc_load_playlist',
                       {'text': item})
@@ -729,36 +701,33 @@ def form_artists_menu(folder):
     Form the Artist menu for the LCD
     '''
     for item in get_mpd_artists():
-        if DEBUG:
-            print('adding item %s to folder %s' % (item, folder.text))
+        dbg_print('adding item %s to folder %s' % (item, folder.text))
         wdgt = Widget(item,
                       'mpc_load_artist',
                       {'text': item})
         folder.items.append(wdgt)
 
 
-def process_node(currentNode, currentFolder):
+def process_node(current_node, current_folder):
     '''
-    currentNode is a dom.documentElement - a folder node from xml
-    currentFolder is of type Folder into which items from currentNode are to be
-        added
+    current_node is a dom.documentElement - a folder node from xml
+    current_folder is of type Folder into which items from current_node are to
+    be added
     '''
 
     dynamic_folder_handlers = {'Playlists': form_playlists_menu,
                                'Artists': form_artists_menu}
-    current_node_text = currentNode.getAttribute('text')
+    current_node_text = current_node.getAttribute('text')
 
-    if DEBUG:
-        print('IN process_node(%s, %s)' % (current_node_text,
-                                           currentFolder.text))
+    dbg_print('IN process_node(%s, %s)' % (current_node_text,
+                                           current_folder.text))
 
-    if currentFolder.text in dynamic_folder_handlers:
-        if DEBUG:
-            print('adding dynamic labels to folder %s' % (current_node_text))
-        dynamic_folder_handlers[current_node_text](currentFolder)
+    if current_folder.text in dynamic_folder_handlers:
+        dbg_print('adding dynamic labels to folder %s' % (current_node_text))
+        dynamic_folder_handlers[current_node_text](current_folder)
         return
 
-    children = currentNode.childNodes
+    children = current_node.childNodes
 
     for child in children:
         if isinstance(child, minidom.Element):
@@ -771,19 +740,19 @@ def process_node(currentNode, currentFolder):
             child_text_attrib = child.getAttribute('text')
 
             if child.tagName == 'folder':
-                this_folder = Folder(child_text_attrib, currentFolder)
-                currentFolder.items.append(this_folder)
+                this_folder = Folder(child_text_attrib, current_folder)
+                current_folder.items.append(this_folder)
                 process_node(child, this_folder)
             elif child.tagName == 'widget':
                 this_widget = Widget(child_text_attrib,
                                      child.getAttribute('function'),
                                      attributes_d)
-                currentFolder.items.append(this_widget)
+                current_folder.items.append(this_widget)
             '''
             elif child.tagName == 'run':
                 thisCommand = CommandToRun(child_text_attrib,
                                            child.firstChild.data)
-                currentFolder.items.append(thisCommand)
+                current_folder.items.append(thisCommand)
             elif child.tagName == 'settings':
                 HandleSettings(child)
             '''
@@ -796,11 +765,11 @@ class Display:
         self.current_top_item = 0
         self.current_selected_item = 0
         # Map keys hit to functions
-        self.upd_table = {LEFT: self.left,
-                          RIGHT: self.right,
-                          UP: self.up,
-                          DOWN: self.down,
-                          SELECT: self.select
+        self.upd_table = {LEFT: self.btn_left,
+                          RIGHT: self.btn_right,
+                          UP: self.btn_up,
+                          DOWN: self.btn_down,
+                          SELECT: self.btn_select
                           }
 
     def display(self):
@@ -809,8 +778,7 @@ class Display:
             self.current_top_item = len(self.current_folder.items) - LCD_ROWS
         if self.current_top_item < 0:
             self.current_top_item = 0
-        if DEBUG:
-            print('------------------')
+        dbg_print('------------------')
         lcd_str = ''
         for row in range(self.current_top_item,
                          self.current_top_item+LCD_ROWS):
@@ -822,52 +790,52 @@ class Display:
                     if len(cmd) < 16:
                         for _ in range(len(cmd), 16):
                             cmd += ' '
-                    if DEBUG:
-                        print('|'+cmd+'|')
+                    dbg_print('|'+cmd+'|')
                     lcd_str += cmd
                 else:
                     cmd = ' '+self.current_folder.items[row].text
                     if len(cmd) < 16:
                         for _ in range(len(cmd), 16):
                             cmd += ' '
-                    if DEBUG:
-                        print('|'+cmd+'|')
+                    dbg_print('|'+cmd+'|')
                     lcd_str += cmd
-        if DEBUG:
-            print('------------------')
+        dbg_print('------------------')
         LCD_QUEUE.put((MSG_LCD, lcd_str), block=True)
 
     def update(self, key):
+        ''' take action an an item chosen in menu '''
         if key in self.upd_table:
             self.upd_table[key]()
 
-    def up(self):
+    def btn_up(self):
+        ''' go up one menu item '''
         if self.current_selected_item == 0:
             return
-        elif self.current_selected_item > self.current_top_item:
+        if self.current_selected_item > self.current_top_item:
             self.current_selected_item -= 1
         else:
             self.current_top_item -= 1
             self.current_selected_item -= 1
 
-    def down(self):
+    def btn_down(self):
+        ''' go down one menu item '''
         if self.current_selected_item+1 == len(self.current_folder.items):
             return
-        elif self.current_selected_item < self.current_top_item+LCD_ROWS-1:
+        if self.current_selected_item < self.current_top_item+LCD_ROWS-1:
             self.current_selected_item += 1
         else:
             self.current_top_item += 1
             self.current_selected_item += 1
 
-    def left(self):
+    def btn_left(self):
+        ''' menu item go back '''
         if isinstance(self.current_folder.parent, Folder):
             # find the current in the parent
             itemno = 0
             index = 0
             for item in self.current_folder.parent.items:
                 if self.current_folder == item:
-                    if DEBUG:
-                        print('foundit')
+                    dbg_print('foundit')
                     index = itemno
                 else:
                     itemno += 1
@@ -880,7 +848,8 @@ class Display:
                 self.current_top_item = 0
                 self.current_selected_item = 0
 
-    def right(self):
+    def btn_right(self):
+        ''' menu item selected go forward '''
         if isinstance(self.current_folder.items[self.current_selected_item],
                       Folder):
             self.current_folder \
@@ -889,15 +858,15 @@ class Display:
             self.current_selected_item = 0
         elif isinstance(self.current_folder.items[self.current_selected_item],
                         Widget):
-            if DEBUG:
-                print('going to call %s()' %
+            dbg_print('going to call %s()' %
                       (self.current_folder.items[self.current_selected_item]
                        .function))
             eval(self.current_folder.items[self.current_selected_item].function
                  + '(**self.current_folder.items'
                  '[self.current_selected_item].kwargs)')
 
-    def select(self):
+    def btn_select(self):
+        ''' menu item selected. do something '''
         if isinstance(self.current_folder.items[self.current_selected_item],
                       Folder):
             self.current_folder = self.current_folder.items[
@@ -906,8 +875,7 @@ class Display:
             self.current_selected_item = 0
         elif isinstance(self.current_folder.items[self.current_selected_item],
                         Widget):
-            if DEBUG:
-                print('going to call %s()' %
+            dbg_print('going to call %s()' %
                       (self.current_folder.items[self.current_selected_item]
                        .function))
             eval(self.current_folder.items
@@ -924,13 +892,10 @@ def main():
     Main function to init stuff and start player
     '''
 
-    global mpdc
-
-    if DEBUG:
-        print('entering main()')
+    dbg_print('entering main()')
 
     settings_load()
-    mpdc = mpdc_init()
+    mpdc_init()
     lcd_init()
 
     thrds = threads_init()
@@ -950,8 +915,7 @@ def main():
     display = Display(ui_items)
     display.display()
 
-    if DEBUG:
-        print('entering while() in main()')
+    dbg_print('entering while() in main()')
 
     while 1:
         # Poll all buttons once, avoids repeated I2C traffic

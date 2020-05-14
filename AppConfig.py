@@ -26,7 +26,7 @@ class AppConfig:
             AppConfig.__conf = json.load(conf_file)
 
     @staticmethod
-    def config(name, section=None):
+    def get(name, section=None):
         ''' get the value of a setting from a given section '''
         if section:
             if section in AppConfig.__conf:
@@ -83,6 +83,6 @@ print(settings)
 if __name__ == "__main__":
     # from config import AppConfig
     AppConfig.config_load()
-    print('volume:', AppConfig.config('volume', 'rpi_player'))
+    print('volume:', AppConfig.get('volume', 'rpi_player'))
     AppConfig.set(33, 'volume', 'rpi_player')
     AppConfig.config_save()

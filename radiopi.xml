@@ -20,12 +20,12 @@
     </folder>
   </folder>
   <folder text="Audio Settings">
-    <widget text="Use HDMI" function="audioHdmi" />
-    <widget text="Use Headphone" function="audioHphone" />
-    <widget text="Auto Select" function="audioAuto" />
+    <widget text="Use HDMI" function="audio_hdmi" />
+    <widget text="Use Headphone" function="audio_headphone" />
+    <widget text="Auto Select" function="audio_auto" />
   </folder>
   <folder text="Radio Settings ">
-  <widget text="Save Settings" function="saveSettingsWrapper" />
+  <widget text="Save Settings" function="save_settings_wrapper" />
   <widget text="Quit App" function="quit_app" />
   </folder>
   <widget text="Shutdown" function="do_shutdown" />
