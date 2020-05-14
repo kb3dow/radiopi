@@ -102,7 +102,15 @@ charSevenBitmaps = [[0b10000,  # Play (also selected station)
                      0b11010,
                      0b10100,
                      0b00000,
-                     0b00000]]
+                     0b00000],
+                    [0b00100,
+                     0b01110,
+                     0b11111,
+                     0b00000,
+                     0b00000,
+                     0b11111,
+                     0b01110,
+                     0b00100]]
 
 
 def dbg_print(msg):
@@ -234,15 +242,7 @@ def lcd_init():
         LCD.createChar(i, bitmap)
 
     # Create up/down icon (char 6)
-    LCD.createChar(6, [0b00100,
-                       0b01110,
-                       0b11111,
-                       0b00000,
-                       0b00000,
-                       0b11111,
-                       0b01110,
-                       0b00100])
-
+    LCD.createChar(6, charSevenBitmaps[2])
     # By default, char 7 is loaded in 'pause' state
     LCD.createChar(7, charSevenBitmaps[1])
     # By default, char 8 is loaded in 'play' state
@@ -343,7 +343,7 @@ def mpc_toggle_pause(client):
     return True
 
 
-def player_mode(**kwargs):
+def player_mode(**_kwargs):
     '''
     Inside a playlist manage the buttons to play nex prev track
     '''
@@ -440,7 +440,7 @@ def settings_save():
     AppConfig.config_save()
 
 
-def save_settings_wrapper(**kwargs):
+def save_settings_wrapper(**_kwargs):
     ''' display message on lcd and save settings '''
     LCD_QUEUE.put((MSG_LCD, "Saving          \nSettings ...    "), block=True)
     settings_save()
@@ -476,22 +476,22 @@ def get_mpd_artists():
 # ----------------------------
 # RADIO SETUP MENU
 # ----------------------------
-def audio_hdmi(**kwargs):
+def audio_hdmi(**_kwargs):
     ''' audio output to HDMI jack '''
     run_cmd("amixer -q cset numid=3 1")
 
 
-def audio_headphone(**kwargs):
+def audio_headphone(**_kwargs):
     ''' audio output to headphone port '''
     run_cmd("amixer -q cset numid=3 2")
 
 
-def audio_auto(**kwargs):
+def audio_auto(**_kwargs):
     ''' audio output auto-select '''
     run_cmd("amixer -q cset numid=3 0")
 
 
-def display_ipaddr(**kwargs):
+def display_ipaddr(**_kwargs):
     ''' show IP addr on display '''
 
     # connect to google dns server and find the address
@@ -537,7 +537,7 @@ def run_cmd(cmd):
 
 
 # commands
-def quit_app(**kwargs):
+def quit_app(**_kwargs):
     ''' quit the app '''
     LCD.clear()
     LCD.message('Are you sure?\nPress Sel for Y')
@@ -551,7 +551,7 @@ def quit_app(**kwargs):
         time.sleep(0.25)
 
 
-def do_shutdown(**kwargs):
+def do_shutdown(**_kwargs):
     ''' Shutdown the board '''
     LCD.clear()
     LCD.message('Are you sure?\nPress Sel for Y')
@@ -567,12 +567,12 @@ def do_shutdown(**kwargs):
         time.sleep(0.25)
 
 
-def lcd_turn_off(**kwargs):
+def lcd_turn_off(**_kwargs):
     ''' Turn LCD OFF '''
     LCD.backlight(LCD.OFF)
 
 
-def lcd_turn_on(**kwargs):
+def lcd_turn_on(**_kwargs):
     ''' Turn LCD ON '''
     LCD.backlight(LCD.ON)
 
@@ -593,7 +593,7 @@ def lcd_set_color(**kwargs):
         AppConfig.set(color, 'lcdcolor', 'rpi_player')
 
 
-def dt_show(**kwargs):
+def dt_show(**_kwargs):
     ''' Show the data/time on lcd '''
     LCD.clear()
     while not LCD.buttons():
