@@ -29,7 +29,8 @@ import xml.dom.minidom as minidom
 # from xml.dom.minidom import *
 import socket
 import sys
-from mpd import (MPDClient, MPDError, ConnectionError)
+from mpd import (MPDClient, MPDError)
+# from mpd import (MPDClient, MPDError, ConnectionError)
 
 # from Adafruit.Adafruit_I2C import Adafruit_I2C
 # from Adafruit.Adafruit_MCP230xx import Adafruit_MCP230XX
@@ -51,7 +52,6 @@ LCD_MENU_MODE = 1
 # Globals
 cur_track = 1
 total_tracks = 0
-cur_vol = 0  # Current volume
 display_mode_state = LCD_MENU_MODE
 
 mpd_client = MPDClient()
@@ -133,12 +133,15 @@ def get_mpd_info(lcd_q, client):
         dbg_print(cso)
         dbg_print(cst)
 
+        state = cst['state'] if 'state' in cst else None
+        volume = int(cst['volume']) if 'volume' in cst else 0
+
         # show the symbol if it is in play/stop/pause
-        if 'state' in cst and cst['state'] == 'play':
+        if state == 'play':
             state_bitmap = chr(8)  # play symbol
-        elif 'state' in cst and cst['state'] == 'pause':
+        elif state == 'pause':
             state_bitmap = chr(7)  # pause symbol
-        # elif cst['state'] == 'stop':
+        # elif state == 'stop':
         else:
             state_bitmap = chr(5)  # stop symbol
 
@@ -150,11 +153,14 @@ def get_mpd_info(lcd_q, client):
             line1_info = ''
 
         line1 = line1_info[:16].ljust(16, ' ')
-        line2 = '%s Vol: %s' % (state_bitmap,
-                                cst['volume'])
+        line2 = '%s Vol: %d' % (state_bitmap,
+                                volume)
         line2 = line2.ljust(16, ' ')
         lcd_q.put((MSG_LCD, line1 + '\n' + line2),
                   True)
+        if volume != AppConfig.get('volume', 'rpi_player'):
+            AppConfig.set(volume, 'volume', 'rpi_player')
+
     except Exception as e:
         print('Exception: {}'.format(e))
         raise e
@@ -312,22 +318,24 @@ def mpc_prev(client):
 
 def mpc_vol_up(client, amt=5):
     ''' Volume up '''
-    global cur_vol
-    if cur_vol <= (100-amt):
-        cur_vol += amt
-        client.setvol(cur_vol)
-        dbg_print('Setting Volume  % d' % (cur_vol))
+    volume = AppConfig.get('volume', 'rpi_player')
+    if volume <= (100-amt):
+        volume += amt
+        client.setvol(volume)
+        dbg_print('Setting Volume  % d' % (volume))
+        AppConfig.set(volume, 'volume', 'rpi_player')
         return True
     return False
 
 
 def mpc_vol_down(client, amt=5):
     ''' Volume down '''
-    global cur_vol
-    if cur_vol >= amt:
-        cur_vol -= amt
-        client.setvol(cur_vol)
-        dbg_print('Setting Volume  % d' % (cur_vol))
+    volume = AppConfig.get('volume', 'rpi_player')
+    if volume >= amt:
+        volume -= amt
+        client.setvol(volume)
+        dbg_print('Setting Volume  % d' % (volume))
+        AppConfig.set(volume, 'volume', 'rpi_player')
         return True
     return False
 
