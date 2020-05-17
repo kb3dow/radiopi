@@ -50,7 +50,6 @@ LCD_PLAYER_MODE = 0
 LCD_MENU_MODE = 1
 
 # Globals
-cur_track = 1
 total_tracks = 0
 display_mode_state = LCD_MENU_MODE
 
@@ -276,7 +275,6 @@ def threads_init():
 
 def player_init():
     ''' Init Player '''
-    global cur_track, total_tracks
 
     # Stop music player
     # output = run_cmd("mpc stop") # NOTE: no need to stop what was playing
@@ -286,33 +284,34 @@ def player_init():
 
     time.sleep(2)
     LCD.clear()
-    if cur_track > total_tracks:
-        cur_track = 1
-
-    dbg_print('starting player with track {}'.format(cur_track))
-
 
 def mpc_next(client):
     ''' Play the next track in current playlist '''
-    global cur_track, total_tracks
-    cur_track += 1
-    if cur_track > total_tracks:
-        cur_track = 1
-    dbg_print('Track %d' % (cur_track))
-    # TODO fix for wraparound
-    client.next()
+    st = client.status()
+    if 'nextsong' in st:
+            tr = st['nextsong']
+            client.next()
+    else:
+            tr = '0'
+            client.play(0)
+
+    dbg_print('Track  % s' % (tr))
     return True
 
 
 def mpc_prev(client):
     ''' Play the prev track in current playlist '''
-    global cur_track, total_tracks
-    cur_track -= 1
-    if cur_track < 1:
-        cur_track = total_tracks
-    # TODO fix for wraparound
-    client.previous()
-    dbg_print('Track  % d' % (cur_track))
+    st = client.status()
+    # NOTE: sometimes song item is not in dict
+    # TODO: fix it
+    if st['song'] == '0':
+            tr = int(st['playlistlength']) - 1
+            client.play(tr)
+    else:
+            tr = int(st['song']) - 1
+            client.previous()
+
+    dbg_print('Track  % d' % (tr))
     return True
 
 
