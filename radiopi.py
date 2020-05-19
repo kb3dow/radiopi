@@ -285,33 +285,34 @@ def player_init():
     time.sleep(2)
     LCD.clear()
 
+
 def mpc_next(client):
     ''' Play the next track in current playlist '''
-    st = client.status()
-    if 'nextsong' in st:
-            tr = st['nextsong']
-            client.next()
+    client_status = client.status()
+    if 'nextsong' in client_status:
+        next_song = client_status['nextsong']
+        client.next()
     else:
-            tr = '0'
-            client.play(0)
+        next_song = '0'
+        client.play(0)
 
-    dbg_print('Track  % s' % (tr))
+    dbg_print('Track  % s' % (next_song))
     return True
 
 
 def mpc_prev(client):
     ''' Play the prev track in current playlist '''
-    st = client.status()
+    client_status = client.status()
     # NOTE: sometimes song item is not in dict
     # TODO: fix it
-    if st['song'] == '0':
-            tr = int(st['playlistlength']) - 1
-            client.play(tr)
+    if client_status['song'] == '0':
+        prev_song = int(client_status['playlistlength']) - 1
+        client.play(prev_song)
     else:
-            tr = int(st['song']) - 1
-            client.previous()
+        prev_song = int(client_status['song']) - 1
+        client.previous()
 
-    dbg_print('Track  % d' % (tr))
+    dbg_print('Track  % d' % (prev_song))
     return True
 
 
@@ -350,6 +351,23 @@ def mpc_toggle_pause(client):
     return True
 
 
+def get_mpd_client():
+    ''' get the mpd client. hack to avoid using the same global everywhere '''
+    # extra steps to handle the situation where the mpd_client
+    # connection seems to timeout while waiting
+    while True:
+        try:
+            mpd_client.status()
+        except ConnectionError:
+            mpd_client.connect(AppConfig.get('host', 'mpdclient'),
+                               AppConfig.get('port', 'mpdclient'))
+            continue
+        except MPDError as e:
+            print('Exception: {}'.format(e))
+            continue
+        return mpd_client
+
+
 def player_mode(**_kwargs):
     '''
     Inside a playlist manage the buttons to play nex prev track
@@ -379,24 +397,13 @@ def player_mode(**_kwargs):
         if press == (LONG_PRESS | SELECT):
             break  # Return back to main menu
 
-        # extre steps to handle the situation where the mpd_client
-        # connection seems to timeout while waiting
-        try:
-            mpd_client.status()
-        except ConnectionError:
-            # mpd_client.close()  # doing a close under error condition causes
-            # error again
-            mpd_client.connect("localhost", 6600)  # connect to localhost:6600
-            continue
-        except MPDError as e:
-            print('Exception: {}'.format(e))
-            continue
+        client = get_mpd_client()
 
         press &= 0x7F  # mask out the long press bit
         try:
             # Call the function handling the type of button press
             if press in button_table:
-                button_table[press](mpd_client)
+                button_table[press](client)
 
         except Exception as e:
             print('Exception: {}'.format(e))
@@ -460,7 +467,8 @@ def get_mpd_playlists():
     ''' Get the names of all playlists known to mpd '''
     mpd_playlists = []
 
-    for playlist in mpd_client.listplaylists():
+    client = get_mpd_client()
+    for playlist in client.listplaylists():
         dbg_print('available playlists')
         dbg_print(playlist)
         mpd_playlists.append(playlist['playlist'])
@@ -472,8 +480,9 @@ def get_mpd_artists():
     ''' Get the names of all artists known to mpd '''
     stored_artists = []
 
-    for playlist in mpd_client.listplaylists():
-        for song in mpd_client.listplaylistinfo(playlist['playlist']):
+    client = get_mpd_client()
+    for playlist in client.listplaylists():
+        for song in client.listplaylistinfo(playlist['playlist']):
             if 'artist' in song and song['artist'] not in stored_artists:
                 stored_artists.append(song['artist'])
 
@@ -631,18 +640,19 @@ def loaded_playlist():
     in_playlist = ''
 
     stored_playlists = []
-    for i in mpd_client.listplaylists():
+    client = get_mpd_client()
+    for i in client.listplaylists():
         name = i['playlist']
         stored_playlists.append(name)
 
     current_playlist = []
-    for plistinfo in mpd_client.playlistinfo():
+    for plistinfo in client.playlistinfo():
         song = plistinfo['file']
         current_playlist.append(song)
 
     for plist in stored_playlists:
         tmp_playlist = []
-        for l_plist in mpd_client.listplaylist(plist):
+        for l_plist in client.listplaylist(plist):
             tmp_playlist.append(l_plist)
 
         if tmp_playlist == current_playlist:
@@ -661,11 +671,12 @@ def mpc_load_playlist(**kwargs):
     dbg_print('In mpc_load_playlist() label: %s' % (kwargs['text']))
 
     playlist_name = kwargs['text']
+    client = get_mpd_client()
 
     if playlist_name != loaded_playlist():
-        mpd_client.clear()
-        mpd_client.load(playlist_name)
-        mpd_client.play('0')
+        client.clear()
+        client.load(playlist_name)
+        client.play('0')
 
     player_mode(**{})
     return
@@ -684,9 +695,10 @@ def mpc_load_artist(**kwargs):
 
     artist = kwargs['text']
 
-    mpd_client.clear()
-    mpd_client.findadd('artist', artist)
-    mpd_client.play('0')
+    client = get_mpd_client()
+    client.clear()
+    client.findadd('artist', artist)
+    client.play('0')
 
     player_mode(**{})
 
