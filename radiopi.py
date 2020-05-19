@@ -358,12 +358,9 @@ def get_mpd_client():
     while True:
         try:
             mpd_client.status()
-        except ConnectionError:
+        except (ConnectionError, MPDError):
             mpd_client.connect(AppConfig.get('host', 'mpdclient'),
                                AppConfig.get('port', 'mpdclient'))
-            continue
-        except MPDError as e:
-            print('Exception: {}'.format(e))
             continue
         return mpd_client
 
