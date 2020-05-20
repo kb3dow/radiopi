@@ -12,7 +12,8 @@
 # AdaFruit - https://github.com/adafruit/Adafruit-Raspberry-Pi-Python-Code.git,
 # Adafruit_CharLCDPlate
 #
-# Additions by Rajarajan Rajamani - to save settings to an .ini file
+# Additions by Rajarajan Rajamani
+# -------------------------------
 # 2016 May: Some ideas for flask from :
 #     http://www.instructables.com/id/Raspberry-Pi-Internet-Radio-With-Flask/?ALLSTEPS
 # 2020 Mar: All flash changes abandoned for now
@@ -161,7 +162,7 @@ def get_mpd_info(lcd_q, client):
             AppConfig.set(volume, 'volume', 'rpi_player')
 
     except Exception as e:
-        print('Exception: {}'.format(e))
+        print('1: Exception: {}'.format(e))
         raise e
 
 
@@ -182,7 +183,6 @@ def mpd_poller(lcd_q):
         dbg_print(client.status())
         while True:
             try:
-                client.idle()
                 # Update the display only if LCD in player mode
                 # otherwise though music is being played, a menu might
                 # be displayed that we do not want to overwrite
@@ -190,9 +190,13 @@ def mpd_poller(lcd_q):
                     # if 'player' in change or 'mixer' in change:
                         # get_mpd_info(lcd_q, client)
                     get_mpd_info(lcd_q, client)
+                client.idle()
 
+            except TimeoutError:
+                print('Timeout: {}'.format(e))
+                break
             except Exception as e:
-                print('Exception: {}'.format(e))
+                print('2: Exception: {}'.format(e))
                 break
         client.close()                     # send the close command
         client.disconnect()                # disconnect from the server
@@ -403,7 +407,7 @@ def player_mode(**_kwargs):
                 button_table[press](client)
 
         except Exception as e:
-            print('Exception: {}'.format(e))
+            print('3: Exception: {}'.format(e))
             continue
 
     display_mode_state = display_mode_state_old
