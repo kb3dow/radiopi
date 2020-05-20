@@ -26,6 +26,7 @@ import subprocess
 import time
 import queue
 import threading
+import socket
 import xml.dom.minidom as minidom
 # from xml.dom.minidom import *
 import socket
@@ -160,11 +161,11 @@ def get_mpd_info(lcd_q, client):
         if volume != AppConfig.get('volume', 'rpi_player'):
             AppConfig.set(volume, 'volume', 'rpi_player')
 
-    except TimeoutError as e:
+    except socket.timeout as e:
         print('1: Timeout: {}'.format(e))
         raise e
     except Exception as e:
-        print('1: Exception: {}'.format(e))
+        print('1: Exception: {}'.format(repr(e)))
         raise e
 
 
@@ -194,11 +195,11 @@ def mpd_poller(lcd_q):
                     get_mpd_info(lcd_q, client)
                 client.idle()
 
-            except TimeoutError:
-                print('2: Timeout: {}'.format(e))
-                break
+            except socket.timeout as e:
+                print('2: Timeout: {}'.format(repr(e)))
+                continue
             except Exception as e:
-                print('2: Exception: {}'.format(e))
+                print('2: Exception: {}'.format(repr(e)))
                 break
         client.close()                     # send the close command
         client.disconnect()                # disconnect from the server
@@ -408,11 +409,11 @@ def player_mode(**_kwargs):
             if press in button_table:
                 button_table[press](client)
 
-        except TimeoutError:
+        except socket.timeout as e:
             print('3: Timeout: {}'.format(e))
             break
         except Exception as e:
-            print('3: Exception: {}'.format(e))
+            print('3: Exception: {}'.format(repr(e)))
             continue
 
     display_mode = display_mode_old
