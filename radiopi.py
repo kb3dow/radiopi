@@ -51,8 +51,7 @@ LCD_PLAYER_MODE = 0
 LCD_MENU_MODE = 1
 
 # Globals
-total_tracks = 0
-display_mode_state = LCD_MENU_MODE
+display_mode = LCD_MENU_MODE
 
 mpd_client = MPDClient()
 
@@ -161,6 +160,9 @@ def get_mpd_info(lcd_q, client):
         if volume != AppConfig.get('volume', 'rpi_player'):
             AppConfig.set(volume, 'volume', 'rpi_player')
 
+    except TimeoutError as e:
+        print('1: Timeout: {}'.format(e))
+        raise e
     except Exception as e:
         print('1: Exception: {}'.format(e))
         raise e
@@ -186,14 +188,14 @@ def mpd_poller(lcd_q):
                 # Update the display only if LCD in player mode
                 # otherwise though music is being played, a menu might
                 # be displayed that we do not want to overwrite
-                if display_mode_state == LCD_PLAYER_MODE:
+                if display_mode == LCD_PLAYER_MODE:
                     # if 'player' in change or 'mixer' in change:
                         # get_mpd_info(lcd_q, client)
                     get_mpd_info(lcd_q, client)
                 client.idle()
 
             except TimeoutError:
-                print('Timeout: {}'.format(e))
+                print('2: Timeout: {}'.format(e))
                 break
             except Exception as e:
                 print('2: Exception: {}'.format(e))
@@ -373,7 +375,7 @@ def player_mode(**_kwargs):
     '''
     Inside a playlist manage the buttons to play nex prev track
     '''
-    global display_mode_state
+    global display_mode
 
     dbg_print('inside player_mode - flushing')
 
@@ -382,8 +384,8 @@ def player_mode(**_kwargs):
                     RIGHT: mpc_next,
                     UP: mpc_vol_up,
                     DOWN: mpc_vol_down}
-    display_mode_state_old = display_mode_state
-    display_mode_state = LCD_PLAYER_MODE
+    display_mode_old = display_mode
+    display_mode = LCD_PLAYER_MODE
 
     flush_buttons()
 
@@ -406,11 +408,14 @@ def player_mode(**_kwargs):
             if press in button_table:
                 button_table[press](client)
 
+        except TimeoutError:
+            print('3: Timeout: {}'.format(e))
+            break
         except Exception as e:
             print('3: Exception: {}'.format(e))
             continue
 
-    display_mode_state = display_mode_state_old
+    display_mode = display_mode_old
 
 
 def flush_buttons():
