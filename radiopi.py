@@ -128,10 +128,12 @@ def get_mpd_info(lcd_q, client):
     Show what is playing on the lcd screen
     '''
     try:
-        cso = client.currentsong()
         cst = client.status()
-        dbg_print(cso)
+        cso = client.currentsong()
+
         dbg_print(cst)
+        if 'file' in cso:
+            dbg_print(cso)
 
         state = cst['state'] if 'state' in cst else None
         volume = int(cst['volume']) if 'volume' in cst else 0
@@ -142,7 +144,7 @@ def get_mpd_info(lcd_q, client):
         elif state == 'pause':
             state_bitmap = chr(7)  # pause symbol
         # elif state == 'stop':
-        else:
+        else: # state is 'stop' or None (i.e. could not obtain)
             state_bitmap = chr(5)  # stop symbol
 
         if 'title' in cso:
@@ -197,7 +199,7 @@ def mpd_poller(lcd_q):
 
             except socket.timeout as e:
                 print('2: Timeout: {}'.format(repr(e)))
-                continue
+                break
             except Exception as e:
                 print('2: Exception: {}'.format(repr(e)))
                 break
@@ -411,7 +413,7 @@ def player_mode(**_kwargs):
 
         except socket.timeout as e:
             print('3: Timeout: {}'.format(e))
-            break
+            continue
         except Exception as e:
             print('3: Exception: {}'.format(repr(e)))
             continue
