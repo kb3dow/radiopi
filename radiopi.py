@@ -28,14 +28,9 @@ import queue
 import threading
 import socket
 import xml.dom.minidom as minidom
-# from xml.dom.minidom import *
-import socket
 import sys
 from mpd import (MPDClient, MPDError)
-# from mpd import (MPDClient, MPDError, ConnectionError)
 
-# from Adafruit.Adafruit_I2C import Adafruit_I2C
-# from Adafruit.Adafruit_MCP230xx import Adafruit_MCP230XX
 from Adafruit.Adafruit_CharLCDPlate import Adafruit_CharLCDPlate
 # import utils.cmd
 from AppConfig import AppConfig
@@ -144,7 +139,7 @@ def get_mpd_info(lcd_q, client):
         elif state == 'pause':
             state_bitmap = chr(7)  # pause symbol
         # elif state == 'stop':
-        else: # state is 'stop' or None (i.e. could not obtain)
+        else:  # state is 'stop' or None (i.e. could not obtain)
             state_bitmap = chr(5)  # stop symbol
 
         if 'title' in cso:
@@ -688,7 +683,6 @@ def mpc_load_playlist(**kwargs):
         client.play('0')
 
     player_mode(**{})
-    return
 
 
 def mpc_load_artist(**kwargs):
