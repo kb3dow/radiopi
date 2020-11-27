@@ -47,7 +47,7 @@ LCD_PLAYER_MODE = 0
 LCD_MENU_MODE = 1
 
 # Globals
-display_mode = LCD_MENU_MODE
+DISPLAY_MODE = LCD_MENU_MODE
 
 mpd_client = MPDClient()
 
@@ -186,7 +186,7 @@ def mpd_poller(lcd_q):
                 # Update the display only if LCD in player mode
                 # otherwise though music is being played, a menu might
                 # be displayed that we do not want to overwrite
-                if display_mode == LCD_PLAYER_MODE:
+                if DISPLAY_MODE == LCD_PLAYER_MODE:
                     # if 'player' in change or 'mixer' in change:
                         # get_mpd_info(lcd_q, client)
                     get_mpd_info(lcd_q, client)
@@ -280,9 +280,6 @@ def threads_init():
 def player_init():
     ''' Init Player '''
 
-    # Stop music player
-    # output = run_cmd("mpc stop") # NOTE: no need to stop what was playing
-
     # Display startup banner
     LCD_QUEUE.put((MSG_LCD, 'Welcome to\nRadio Pi'), True)
 
@@ -373,7 +370,7 @@ def player_mode(**_kwargs):
     '''
     Inside a playlist manage the buttons to play nex prev track
     '''
-    global display_mode
+    global DISPLAY_MODE
 
     dbg_print('inside player_mode - flushing')
 
@@ -382,8 +379,8 @@ def player_mode(**_kwargs):
                     RIGHT: mpc_next,
                     UP: mpc_vol_up,
                     DOWN: mpc_vol_down}
-    display_mode_old = display_mode
-    display_mode = LCD_PLAYER_MODE
+    display_mode_old = DISPLAY_MODE
+    DISPLAY_MODE = LCD_PLAYER_MODE
 
     flush_buttons()
 
@@ -413,7 +410,7 @@ def player_mode(**_kwargs):
             print('3: Exception: {}'.format(repr(e)))
             continue
 
-    display_mode = display_mode_old
+    DISPLAY_MODE = display_mode_old
 
 
 def flush_buttons():
